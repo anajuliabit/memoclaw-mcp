@@ -65,7 +65,7 @@ Paid with USDC on Base via x402 protocol.
 ## Links
 
 - [MemoClaw Website](https://memoclaw.dev)
-- [MemoClaw Docs](https://memoclaw.dev/docs)
+- [MemoClaw Docs](https://docs.memoclaw.com)
 - [MCP Specification](https://modelcontextprotocol.io)
 
 ## License
