@@ -27,5 +27,6 @@
     "ai-agent",
     "semantic-search"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "mcpName": "io.github.anajuliabit/memoclaw-mcp"
 }
