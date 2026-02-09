@@ -11,7 +11,7 @@ import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { toClientEvmSigner } from '@x402/evm';
 import { privateKeyToAccount } from 'viem/accounts';
 
-const API_URL = process.env.MEMOCLAW_URL || 'https://api.memoclaw.com';
+const API_URL = process.env.MEMOCLAW_URL || 'https://api.memoclaw.dev';
 const PRIVATE_KEY = process.env.MEMOCLAW_PRIVATE_KEY;
 
 if (!PRIVATE_KEY) {
