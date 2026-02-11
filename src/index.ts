@@ -101,6 +101,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           importance: { type: 'number', description: 'Importance score 0-1 (default 0.5)' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           namespace: { type: 'string', description: 'Namespace for organization' },
+          expires_at: { type: 'string', description: 'ISO 8601 expiration date (must be in the future)' },
         },
         required: ['content'],
       },
@@ -205,12 +206,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'memoclaw_store': {
-        const { content, importance, tags, namespace } = args as any;
+        const { content, importance, tags, namespace, expires_at } = args as any;
         const result = await makeRequest('POST', '/v1/store', {
           content,
           importance,
           metadata: tags ? { tags } : undefined,
           namespace,
+          expires_at,
         });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
