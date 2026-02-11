@@ -152,6 +152,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {},
       },
     },
+    {
+      name: 'memoclaw_ingest',
+      description: 'Ingest a conversation or text and auto-extract + relate memories. Zero-effort: just send messages and MemoClaw handles extraction, storage, deduplication, and relationship creation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          messages: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                role: { type: 'string', description: 'Message role (user, assistant, system)' },
+                content: { type: 'string', description: 'Message content' },
+              },
+              required: ['role', 'content'],
+            },
+            description: 'Conversation messages to ingest',
+          },
+          text: { type: 'string', description: 'Raw text to ingest (alternative to messages)' },
+          namespace: { type: 'string', description: 'Namespace for organization' },
+          session_id: { type: 'string', description: 'Session ID for grouping' },
+          agent_id: { type: 'string', description: 'Agent ID for attribution' },
+          auto_relate: { type: 'boolean', description: 'Auto-create relations between co-extracted facts (default true)' },
+        },
+      },
+    },
   ],
 }));
 
@@ -213,7 +239,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const res = await fetch(`${API_URL}/v1/free-tier/status`, {
           headers: { 'x-wallet-auth': walletAuth }
         });
-        
+
         if (res.ok) {
           const data = await res.json();
           return {
@@ -225,6 +251,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         } else {
           throw new Error('Failed to get status');
         }
+      }
+
+      case 'memoclaw_ingest': {
+        const { messages, text, namespace, session_id, agent_id, auto_relate } = args as any;
+        const body: any = {};
+        if (messages) body.messages = messages;
+        if (text) body.text = text;
+        if (namespace) body.namespace = namespace;
+        if (session_id) body.session_id = session_id;
+        if (agent_id) body.agent_id = agent_id;
+        if (auto_relate !== undefined) body.auto_relate = auto_relate;
+
+        const result = await makeRequest('POST', '/v1/ingest', body);
+
+        const summary = [
+          `Facts extracted: ${result.facts_extracted}`,
+          `Facts stored: ${result.facts_stored}`,
+          `Facts deduplicated: ${result.facts_deduplicated}`,
+          `Relations created: ${result.relations_created}`,
+          `Memory IDs: ${result.memory_ids?.join(', ') || 'none'}`,
+          `Tokens used: ${result.tokens_used}`,
+        ].join('\n');
+
+        return { content: [{ type: 'text', text: summary }] };
       }
 
       default:
