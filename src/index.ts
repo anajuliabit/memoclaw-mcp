@@ -145,6 +145,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'memoclaw_update',
+      description: 'Update a memory by ID. Can change content (triggers re-embedding), metadata, importance, memory_type, namespace, or expires_at. Only provided fields are updated.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Memory ID to update' },
+          content: { type: 'string', description: 'New memory content (triggers re-embedding)' },
+          metadata: { type: 'object', description: 'New metadata (replaces existing)' },
+          importance: { type: 'number', description: 'New importance score 0-1' },
+          memory_type: { type: 'string', description: 'New memory type: correction, preference, decision, project, observation, general' },
+          namespace: { type: 'string', description: 'Move to a different namespace' },
+          expires_at: { type: ['string', 'null'], description: 'ISO 8601 expiration date, or null to clear' },
+        },
+        required: ['id'],
+      },
+    },
+    {
       name: 'memoclaw_status',
       description: 'Check free tier remaining calls for this wallet',
       inputSchema: {
@@ -231,6 +248,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'memoclaw_delete': {
         const { id } = args as any;
         const result = await makeRequest('DELETE', `/v1/memories/${id}`);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'memoclaw_update': {
+        const { id, content, metadata, importance, memory_type, namespace, expires_at } = args as any;
+        const body: any = {};
+        if (content !== undefined) body.content = content;
+        if (metadata !== undefined) body.metadata = metadata;
+        if (importance !== undefined) body.importance = importance;
+        if (memory_type !== undefined) body.memory_type = memory_type;
+        if (namespace !== undefined) body.namespace = namespace;
+        if (expires_at !== undefined) body.expires_at = expires_at;
+
+        const result = await makeRequest('PATCH', `/v1/memories/${id}`, body);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
