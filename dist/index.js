@@ -7,33 +7,54 @@ import { x402HTTPClient } from '@x402/core/http';
 import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { toClientEvmSigner } from '@x402/evm';
 import { privateKeyToAccount } from 'viem/accounts';
-const API_URL = process.env.MEMOCLAW_URL || 'https://api.memoclaw.dev';
+const API_URL = process.env.MEMOCLAW_URL || 'https://api.memoclaw.com';
 const PRIVATE_KEY = process.env.MEMOCLAW_PRIVATE_KEY;
 if (!PRIVATE_KEY) {
     console.error('MEMOCLAW_PRIVATE_KEY environment variable required');
     process.exit(1);
 }
-// x402 payment client setup
+// Wallet setup
 const account = privateKeyToAccount(PRIVATE_KEY);
-const signer = toClientEvmSigner(account);
-const coreClient = new x402Client().register('eip155:*', new ExactEvmScheme(signer));
-const client = new x402HTTPClient(coreClient);
+// x402 client (lazy init - only when free tier exhausted)
+let _x402Client = null;
+function getX402Client() {
+    if (!_x402Client) {
+        const signer = toClientEvmSigner(account);
+        const coreClient = new x402Client().register('eip155:*', new ExactEvmScheme(signer));
+        _x402Client = new x402HTTPClient(coreClient);
+    }
+    return _x402Client;
+}
+/**
+ * Generate wallet auth header for free tier
+ * Format: {address}:{timestamp}:{signature}
+ */
+async function getWalletAuthHeader() {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `memoclaw-auth:${timestamp}`;
+    const signature = await account.signMessage({ message });
+    return `${account.address}:${timestamp}:${signature}`;
+}
 async function makeRequest(method, path, body) {
     const url = `${API_URL}${path}`;
     const headers = { 'Content-Type': 'application/json' };
     const options = { method, headers };
     if (body)
         options.body = JSON.stringify(body);
-    let res = await fetch(url, options);
-    // Handle 402 Payment Required
+    // Try free tier first
+    const walletAuth = await getWalletAuthHeader();
+    headers['x-wallet-auth'] = walletAuth;
+    let res = await fetch(url, { ...options, headers });
+    // Handle 402 Payment Required (free tier exhausted)
     if (res.status === 402) {
         const errorBody = await res.json();
+        const client = getX402Client();
         const paymentRequired = client.getPaymentRequiredResponse((name) => res.headers.get(name), errorBody);
         const paymentPayload = await client.createPaymentPayload(paymentRequired);
         const paymentHeaders = client.encodePaymentSignatureHeader(paymentPayload);
         res = await fetch(url, {
             method,
-            headers: { ...headers, ...paymentHeaders },
+            headers: { 'Content-Type': 'application/json', ...paymentHeaders },
             body: body ? JSON.stringify(body) : undefined,
         });
     }
@@ -43,13 +64,13 @@ async function makeRequest(method, path, body) {
     }
     return res.json();
 }
-const server = new Server({ name: 'memoclaw', version: '1.0.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'memoclaw', version: '1.1.0' }, { capabilities: { tools: {} } });
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
         {
             name: 'memoclaw_store',
-            description: 'Store a memory with semantic embeddings for later recall',
+            description: 'Store a memory with semantic embeddings for later recall. Free tier: 1000 calls per wallet.',
             inputSchema: {
                 type: 'object',
                 properties: {
@@ -63,7 +84,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         {
             name: 'memoclaw_recall',
-            description: 'Recall memories via semantic search',
+            description: 'Recall memories via semantic search. Free tier: 1000 calls per wallet.',
             inputSchema: {
                 type: 'object',
                 properties: {
@@ -100,6 +121,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 required: ['id'],
             },
         },
+        {
+            name: 'memoclaw_status',
+            description: 'Check free tier remaining calls for this wallet',
+            inputSchema: {
+                type: 'object',
+                properties: {},
+            },
+        },
     ],
 }));
 // Handle tool calls
@@ -128,7 +157,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 });
                 // Format results nicely
                 const memories = result.memories || [];
-                const formatted = memories.map((m) => `[${m.score?.toFixed(3) || '?'}] ${m.content}\n  tags: ${m.metadata?.tags?.join(', ') || 'none'}`).join('\n\n');
+                const formatted = memories.map((m) => `[${m.similarity?.toFixed(3) || '?'}] ${m.content}\n  tags: ${m.metadata?.tags?.join(', ') || 'none'}`).join('\n\n');
                 return { content: [{ type: 'text', text: formatted || 'No memories found' }] };
             }
             case 'memoclaw_list': {
@@ -148,6 +177,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const result = await makeRequest('DELETE', `/v1/memories/${id}`);
                 return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
             }
+            case 'memoclaw_status': {
+                const walletAuth = await getWalletAuthHeader();
+                const res = await fetch(`${API_URL}/v1/free-tier/status`, {
+                    headers: { 'x-wallet-auth': walletAuth }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: `Wallet: ${data.wallet}\nFree tier: ${data.free_tier_remaining}/${data.free_tier_total} calls remaining`
+                            }]
+                    };
+                }
+                else {
+                    throw new Error('Failed to get status');
+                }
+            }
             default:
                 throw new Error(`Unknown tool: ${name}`);
         }
@@ -163,6 +210,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('MemoClaw MCP server running');
+    console.error('MemoClaw MCP server running (free tier enabled)');
 }
 main().catch(console.error);
