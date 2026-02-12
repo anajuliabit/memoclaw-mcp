@@ -44,6 +44,8 @@ Add to MCP settings in Cursor preferences.
 | `memoclaw_recall` | Recall memories via semantic search |
 | `memoclaw_list` | List stored memories |
 | `memoclaw_delete` | Delete a memory by ID |
+| `memoclaw_status` | Check free tier remaining calls |
+| `memoclaw_ingest` | Zero-effort ingestion: dump conversations/text, auto-extract facts with dedup & relations |
 
 ## Example Usage
 

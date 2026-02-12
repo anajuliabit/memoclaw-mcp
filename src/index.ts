@@ -101,7 +101,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           importance: { type: 'number', description: 'Importance score 0-1 (default 0.5)' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           namespace: { type: 'string', description: 'Namespace for organization' },
-          expires_at: { type: 'string', description: 'ISO 8601 expiration date (must be in the future)' },
         },
         required: ['content'],
       },
@@ -146,23 +145,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
-      name: 'memoclaw_update',
-      description: 'Update a memory by ID. Can change content (triggers re-embedding), metadata, importance, memory_type, namespace, or expires_at. Only provided fields are updated.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', description: 'Memory ID to update' },
-          content: { type: 'string', description: 'New memory content (triggers re-embedding)' },
-          metadata: { type: 'object', description: 'New metadata (replaces existing)' },
-          importance: { type: 'number', description: 'New importance score 0-1' },
-          memory_type: { type: 'string', description: 'New memory type: correction, preference, decision, project, observation, general' },
-          namespace: { type: 'string', description: 'Move to a different namespace' },
-          expires_at: { type: ['string', 'null'], description: 'ISO 8601 expiration date, or null to clear' },
-        },
-        required: ['id'],
-      },
-    },
-    {
       name: 'memoclaw_status',
       description: 'Check free tier remaining calls for this wallet',
       inputSchema: {
@@ -172,27 +154,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'memoclaw_ingest',
-      description: 'Ingest a conversation or text and auto-extract + relate memories. Zero-effort: just send messages and MemoClaw handles extraction, storage, deduplication, and relationship creation.',
+      description: 'Zero-effort ingestion: dump a conversation or raw text, get extracted facts, dedup, and auto-relations. Free tier: 1000 calls per wallet.',
       inputSchema: {
         type: 'object',
         properties: {
-          messages: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                role: { type: 'string', description: 'Message role (user, assistant, system)' },
-                content: { type: 'string', description: 'Message content' },
-              },
-              required: ['role', 'content'],
-            },
-            description: 'Conversation messages to ingest',
-          },
-          text: { type: 'string', description: 'Raw text to ingest (alternative to messages)' },
-          namespace: { type: 'string', description: 'Namespace for organization' },
-          session_id: { type: 'string', description: 'Session ID for grouping' },
-          agent_id: { type: 'string', description: 'Agent ID for attribution' },
-          auto_relate: { type: 'boolean', description: 'Auto-create relations between co-extracted facts (default true)' },
+          messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } }, description: 'Conversation messages' } },
+          text: { type: 'string', description: 'Raw text to ingest' },
+          namespace: { type: 'string', description: 'Namespace for memories' },
+          session_id: { type: 'string', description: 'Session identifier' },
+          agent_id: { type: 'string', description: 'Agent identifier' },
+          auto_relate: { type: 'boolean', description: 'Auto-create relations between facts (default: true)' },
         },
       },
     },
@@ -206,13 +177,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'memoclaw_store': {
-        const { content, importance, tags, namespace, expires_at } = args as any;
+        const { content, importance, tags, namespace } = args as any;
         const result = await makeRequest('POST', '/v1/store', {
           content,
           importance,
           metadata: tags ? { tags } : undefined,
           namespace,
-          expires_at,
         });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
@@ -253,26 +223,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
-      case 'memoclaw_update': {
-        const { id, content, metadata, importance, memory_type, namespace, expires_at } = args as any;
-        const body: any = {};
-        if (content !== undefined) body.content = content;
-        if (metadata !== undefined) body.metadata = metadata;
-        if (importance !== undefined) body.importance = importance;
-        if (memory_type !== undefined) body.memory_type = memory_type;
-        if (namespace !== undefined) body.namespace = namespace;
-        if (expires_at !== undefined) body.expires_at = expires_at;
-
-        const result = await makeRequest('PATCH', `/v1/memories/${id}`, body);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-      }
-
       case 'memoclaw_status': {
         const walletAuth = await getWalletAuthHeader();
         const res = await fetch(`${API_URL}/v1/free-tier/status`, {
           headers: { 'x-wallet-auth': walletAuth }
         });
-
+        
         if (res.ok) {
           const data = await res.json();
           return {
@@ -288,26 +244,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'memoclaw_ingest': {
         const { messages, text, namespace, session_id, agent_id, auto_relate } = args as any;
-        const body: any = {};
-        if (messages) body.messages = messages;
-        if (text) body.text = text;
-        if (namespace) body.namespace = namespace;
-        if (session_id) body.session_id = session_id;
-        if (agent_id) body.agent_id = agent_id;
-        if (auto_relate !== undefined) body.auto_relate = auto_relate;
-
-        const result = await makeRequest('POST', '/v1/ingest', body);
-
-        const summary = [
-          `Facts extracted: ${result.facts_extracted}`,
-          `Facts stored: ${result.facts_stored}`,
-          `Facts deduplicated: ${result.facts_deduplicated}`,
-          `Relations created: ${result.relations_created}`,
-          `Memory IDs: ${result.memory_ids?.join(', ') || 'none'}`,
-          `Tokens used: ${result.tokens_used}`,
-        ].join('\n');
-
-        return { content: [{ type: 'text', text: summary }] };
+        const result = await makeRequest('POST', '/v1/ingest', {
+          messages,
+          text,
+          namespace,
+          session_id,
+          agent_id,
+          auto_relate: auto_relate !== false,
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
       default:
