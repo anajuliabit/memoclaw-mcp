@@ -267,18 +267,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'memoclaw_store': {
-        const { content, importance, tags, namespace, memory_type, session_id, agent_id, pinned, expires_at } = args as any;
-        const result = await makeRequest('POST', '/v1/store', {
-          content,
-          importance,
-          metadata: tags ? { tags } : undefined,
-          namespace,
-          memory_type,
-          session_id,
-          agent_id,
-          pinned,
-          expires_at,
-        });
+        const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned } = args as any;
+        const body: any = { content };
+        if (importance !== undefined) body.importance = importance;
+        if (tags) body.metadata = { tags };
+        if (namespace) body.namespace = namespace;
+        if (memory_type) body.memory_type = memory_type;
+        if (session_id) body.session_id = session_id;
+        if (agent_id) body.agent_id = agent_id;
+        if (expires_at) body.expires_at = expires_at;
+        if (pinned !== undefined) body.pinned = pinned;
+        const result = await makeRequest('POST', '/v1/store', body);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
