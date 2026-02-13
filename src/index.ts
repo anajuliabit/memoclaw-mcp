@@ -116,6 +116,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           min_similarity: { type: 'number', description: 'Min similarity threshold 0-1' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
           namespace: { type: 'string', description: 'Filter by namespace' },
+          memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Filter by memory type' },
         },
         required: ['query'],
       },
@@ -272,12 +273,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memoclaw_recall': {
-        const { query, limit, min_similarity, tags, namespace } = args as any;
+        const { query, limit, min_similarity, tags, namespace, memory_type } = args as any;
+        const filters: Record<string, any> = {};
+        if (tags) filters.tags = tags;
+        if (memory_type) filters.memory_type = memory_type;
         const result = await makeRequest('POST', '/v1/recall', {
           query,
           limit,
           min_similarity,
-          filters: tags ? { tags } : undefined,
+          filters: Object.keys(filters).length > 0 ? filters : undefined,
           namespace,
         });
         
