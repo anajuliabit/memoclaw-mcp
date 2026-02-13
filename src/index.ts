@@ -116,6 +116,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           min_similarity: { type: 'number', description: 'Min similarity threshold 0-1' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
           namespace: { type: 'string', description: 'Filter by namespace' },
+          session_id: { type: 'string', description: 'Filter by session' },
+          agent_id: { type: 'string', description: 'Filter by agent' },
+          include_relations: { type: 'boolean', description: 'Include memory relations in response' },
+          after: { type: 'string', description: 'Only return memories created after this ISO date' },
         },
         required: ['query'],
       },
@@ -272,13 +276,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memoclaw_recall': {
-        const { query, limit, min_similarity, tags, namespace } = args as any;
+        const { query, limit, min_similarity, tags, namespace, session_id, agent_id, include_relations, after } = args as any;
+        const filters: any = {};
+        if (tags) filters.tags = tags;
+        if (after) filters.after = after;
         const result = await makeRequest('POST', '/v1/recall', {
           query,
           limit,
           min_similarity,
-          filters: tags ? { tags } : undefined,
+          filters: Object.keys(filters).length > 0 ? filters : undefined,
           namespace,
+          session_id,
+          agent_id,
+          include_relations,
         });
         
         // Format results nicely
