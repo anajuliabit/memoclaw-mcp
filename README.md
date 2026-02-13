@@ -73,7 +73,13 @@ After the free tier:
 - Store: $0.001 per memory
 - Recall: $0.001 per query
 - List: $0.0005
+- Update: $0.001
 - Delete: $0.0001
+- Ingest: $0.005
+- Extract: $0.005
+- Consolidate: $0.005
+- Suggested: $0.001
+- Relations: $0.0005
 
 Paid with USDC on Base via x402 protocol. The server handles payment automatically.
 
