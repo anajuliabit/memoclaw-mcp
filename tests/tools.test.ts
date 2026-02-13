@@ -96,7 +96,7 @@ describe('MCP Server Tool Definitions', () => {
 
   it('should have 12 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(12);
+    expect(result.tools).toHaveLength(13);
   });
 
   it('store tool requires content', async () => {
