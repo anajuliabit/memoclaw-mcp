@@ -89,13 +89,14 @@ describe('Tool Definitions', () => {
       'memoclaw_status', 'memoclaw_ingest', 'memoclaw_extract',
       'memoclaw_consolidate', 'memoclaw_suggested',
       'memoclaw_create_relation', 'memoclaw_list_relations', 'memoclaw_delete_relation',
-      'memoclaw_export',
+      'memoclaw_export', 'memoclaw_namespaces', 'memoclaw_tags',
+      'memoclaw_bulk_store', 'memoclaw_stats',
     ]));
   });
 
-  it('has 16 tools total', async () => {
+  it('has 20 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(16);
+    expect(result.tools).toHaveLength(20);
   });
 
   it('store requires content', async () => {
@@ -470,6 +471,158 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_list_relations', arguments: {} },
     });
     expect(result.isError).toBe(true);
+  });
+
+  it('namespaces returns formatted list', async () => {
+    globalThis.fetch = mockFetchOk({ 
+      memories: [
+        { id: '1', namespace: 'work' },
+        { id: '2', namespace: 'work' },
+        { id: '3', namespace: 'personal' },
+      ] 
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_namespaces', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('2 namespaces');
+    expect(result.content[0].text).toContain('work');
+    expect(result.content[0].text).toContain('personal');
+  });
+
+  it('namespaces with no namespaces returns default message', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1' }, { id: '2' }] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_namespaces', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('default');
+  });
+
+  it('tags returns formatted list with counts', async () => {
+    globalThis.fetch = mockFetchOk({ 
+      memories: [
+        { id: '1', tags: ['important', 'work'] },
+        { id: '2', tags: ['important'] },
+        { id: '3', tags: ['work'] },
+      ] 
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('2 unique tags');
+    expect(result.content[0].text).toContain('important (2)');
+    expect(result.content[0].text).toContain('work (2)');
+  });
+
+  it('tags with no tags returns empty message', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1' }] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('No tags found');
+  });
+
+  it('bulk_store validates memories array', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('non-empty array');
+  });
+
+  it('bulk_store validates max 50 items', async () => {
+    const memories = Array.from({ length: 51 }, (_, i) => ({ content: `memory ${i}` }));
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Maximum 50');
+  });
+
+  it('bulk_store validates each memory has content', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: '' }, { content: 'valid' }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('content is required');
+  });
+
+  it('bulk_store succeeds with valid memories', async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ memory: { id: `m${callCount}`, content: `memory ${callCount}` } }),
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      });
+    });
+    const result = await callToolHandler({
+      params: { 
+        name: 'memoclaw_bulk_store', 
+        arguments: { 
+          memories: [
+            { content: 'memory 1', importance: 0.8 },
+            { content: 'memory 2', tags: ['test'] }
+          ] 
+        } 
+      },
+    });
+    expect(result.content[0].text).toContain('2 of 2 memories created');
+    expect(callCount).toBe(2);
+  });
+
+  it('bulk_store reports partial failures', async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 2) {
+        return Promise.resolve({
+          ok: false, status: 500,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve('server error'),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ memory: { id: `m${callCount}`, content: `memory ${callCount}` } }),
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      });
+    });
+    const result = await callToolHandler({
+      params: { 
+        name: 'memoclaw_bulk_store', 
+        arguments: { memories: [{ content: 'a' }, { content: 'b' }, { content: 'c' }] } 
+      },
+    });
+    expect(result.content[0].text).toContain('2 of 3 memories created');
+  });
+
+  it('stats returns formatted statistics', async () => {
+    globalThis.fetch = mockFetchOk({ 
+      memories: [
+        { id: '1', importance: 0.9, memory_type: 'decision', namespace: 'work', pinned: true },
+        { id: '2', importance: 0.3, memory_type: 'observation', namespace: 'work' },
+        { id: '3', importance: 0.7, memory_type: 'preference', namespace: 'personal' },
+      ] 
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_stats', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('Total memories: 3');
+    expect(result.content[0].text).toContain('Pinned: 1');
+    expect(result.content[0].text).toContain('decision: 1');
+    expect(result.content[0].text).toContain('work: 2');
+  });
+
+  it('stats with namespace filter shows namespace in output', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_stats', arguments: { namespace: 'work' } },
+    });
+    expect(result.content[0].text).toContain('(work)');
   });
 });
 

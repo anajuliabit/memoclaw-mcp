@@ -4,6 +4,21 @@ All notable changes to memoclaw-mcp will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.0] - 2026-02-13
+
+### Added
+- `memoclaw_namespaces` tool — list all distinct namespaces in your memory store
+- `memoclaw_tags` tool — list all distinct tags with frequency counts
+- `memoclaw_bulk_store` tool — store up to 50 memories in a single API call
+- `memoclaw_stats` tool — get memory statistics (total, by type/namespace/importance, pinned, expiring)
+
+### Fixed
+- Export now supports `jsonl` format in addition to `json`
+
+### Changed
+- Improved tool descriptions for clarity and completeness
+- Added comprehensive tests for all tools (53 tests total)
+
 ## [1.2.0] - 2026-02-13
 
 ### Added

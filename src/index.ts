@@ -357,14 +357,84 @@ const TOOLS = [
   {
     name: 'memoclaw_export',
     description:
-      'Export all memories as a JSON array. Useful for backup, migration, or analysis. ' +
-      'Optionally filter by namespace or agent_id. Returns the full memory objects.',
+      'Export all memories as a JSON array or JSONL. Useful for backup, migration, or analysis. ' +
+      'Optionally filter by namespace or agent_id. Automatically paginates to fetch everything.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         namespace: { type: 'string', description: 'Only export memories from this namespace.' },
         agent_id: { type: 'string', description: 'Only export memories from this agent.' },
-        format: { type: 'string', enum: ['json', 'jsonl'], description: 'Export format. Default: "json".' },
+        format: { type: 'string', enum: ['json', 'jsonl'], description: 'Export format. "jsonl" = one JSON object per line. Default: "json".' },
+      },
+    },
+  },
+  {
+    name: 'memoclaw_namespaces',
+    description:
+      'List all distinct namespaces in your memory store. Useful for discovery — see what organizational ' +
+      'buckets exist before filtering with memoclaw_list or memoclaw_recall. ' +
+      'Fetches all memories and extracts unique namespace values.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agent_id: { type: 'string', description: 'Only list namespaces for this agent.' },
+      },
+    },
+  },
+  {
+    name: 'memoclaw_tags',
+    description:
+      'List all distinct tags across your memories with their frequency counts. ' +
+      'Useful for understanding your tagging taxonomy and finding popular categories. ' +
+      'Optionally filter by namespace.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        namespace: { type: 'string', description: 'Only list tags from this namespace.' },
+        agent_id: { type: 'string', description: 'Only list tags for this agent.' },
+      },
+    },
+  },
+  {
+    name: 'memoclaw_bulk_store',
+    description:
+      'Store multiple memories in a single API call. More efficient than calling memoclaw_store multiple times. ' +
+      'Each memory is embedded for semantic search independently. Max 50 memories per call. ' +
+      'Returns an array of created memories with their IDs. Useful for batch imports or storing related facts.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              content: { type: 'string', description: 'The text content to remember.' },
+              importance: { type: 'number', description: 'Importance score 0.0-1.0. Default: 0.5.' },
+              tags: { type: 'array', items: { type: 'string' }, description: 'Tags for this memory.' },
+              namespace: { type: 'string', description: 'Namespace for this memory.' },
+              memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type.' },
+              pinned: { type: 'boolean', description: 'Pin this memory to prevent decay.' },
+              expires_at: { type: 'string', description: 'ISO 8601 expiry date.' },
+            },
+          },
+          description: 'Array of memory objects to store. Each must have "content". Max 50 items.',
+        },
+      },
+      required: ['memories'],
+    },
+  },
+  {
+    name: 'memoclaw_stats',
+    description:
+      'Get statistics about your memory store: total count, breakdown by type/namespace/tags, ' +
+      'pinned count, expiring soon, and usage trends. Useful for understanding your memory consumption ' +
+      'and planning memory hygiene. No pagination needed — returns aggregated stats.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        namespace: { type: 'string', description: 'Get stats for a specific namespace only.' },
+        agent_id: { type: 'string', description: 'Get stats for a specific agent only.' },
       },
     },
   },
@@ -603,6 +673,168 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           output = JSON.stringify(allMemories, null, 2);
         }
         return { content: [{ type: 'text', text: `📦 Exported ${allMemories.length} memories\n\n${output}` }] };
+      }
+
+      case 'memoclaw_namespaces': {
+        const { agent_id } = args as any;
+        const allMemories: any[] = [];
+        let offset = 0;
+        const pageSize = 100;
+        while (true) {
+          const params = new URLSearchParams();
+          params.set('limit', String(pageSize));
+          params.set('offset', String(offset));
+          if (agent_id) params.set('agent_id', agent_id);
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          const memories = result.memories || result.data || [];
+          allMemories.push(...memories);
+          if (memories.length < pageSize) break;
+          offset += pageSize;
+        }
+        const nsSet = new Set<string>();
+        for (const m of allMemories) {
+          if (m.namespace) nsSet.add(m.namespace);
+        }
+        const namespaces = [...nsSet].sort();
+        if (namespaces.length === 0) {
+          return { content: [{ type: 'text', text: 'No namespaces found. All memories are in the default (unnamespaced) store.' }] };
+        }
+        return { content: [{ type: 'text', text: `📂 ${namespaces.length} namespaces:\n${namespaces.map(ns => `  • ${ns}`).join('\n')}` }] };
+      }
+
+      case 'memoclaw_tags': {
+        const { namespace, agent_id } = args as any;
+        const allMemories: any[] = [];
+        let offset = 0;
+        const pageSize = 100;
+        while (true) {
+          const params = new URLSearchParams();
+          params.set('limit', String(pageSize));
+          params.set('offset', String(offset));
+          if (namespace) params.set('namespace', namespace);
+          if (agent_id) params.set('agent_id', agent_id);
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          const memories = result.memories || result.data || [];
+          allMemories.push(...memories);
+          if (memories.length < pageSize) break;
+          offset += pageSize;
+        }
+        const tagCounts = new Map<string, number>();
+        for (const m of allMemories) {
+          const tags = m.tags || m.metadata?.tags || [];
+          for (const t of tags) {
+            tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+          }
+        }
+        if (tagCounts.size === 0) {
+          return { content: [{ type: 'text', text: 'No tags found.' }] };
+        }
+        const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
+        const formatted = sorted.map(([tag, count]) => `  • ${tag} (${count})`).join('\n');
+        return { content: [{ type: 'text', text: `🏷️ ${tagCounts.size} unique tags:\n${formatted}` }] };
+      }
+
+      case 'memoclaw_bulk_store': {
+        const { memories } = args as any;
+        if (!memories || !Array.isArray(memories) || memories.length === 0) {
+          throw new Error('memories is required and must be a non-empty array');
+        }
+        if (memories.length > 50) {
+          throw new Error('Maximum 50 memories per bulk store call');
+        }
+        // Validate each memory has content
+        for (let i = 0; i < memories.length; i++) {
+          const m = memories[i];
+          if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
+            throw new Error(`memories[${i}].content is required and cannot be empty`);
+          }
+        }
+        // Store concurrently with limited parallelism
+        const results = await Promise.allSettled(
+          memories.map((m: any) => makeRequest('POST', '/v1/store', {
+            content: m.content,
+            importance: m.importance,
+            tags: m.tags,
+            namespace: m.namespace,
+            memory_type: m.memory_type,
+            pinned: m.pinned,
+            expires_at: m.expires_at,
+          }))
+        );
+        const succeeded = results.filter(r => r.status === 'fulfilled');
+        const failed = results
+          .map((r, i) => r.status === 'rejected' ? `${i}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
+          .filter(Boolean);
+        
+        const createdCount = succeeded.length;
+        let text = `✅ Bulk store: ${createdCount} of ${memories.length} memories created`;
+        if (failed.length > 0) text += `\n\nFailed:\n${failed.join('\n')}`;
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'memoclaw_stats': {
+        const { namespace, agent_id } = args as any;
+        const allMemories: any[] = [];
+        let offset = 0;
+        const pageSize = 100;
+        while (true) {
+          const params = new URLSearchParams();
+          params.set('limit', String(pageSize));
+          params.set('offset', String(offset));
+          if (namespace) params.set('namespace', namespace);
+          if (agent_id) params.set('agent_id', agent_id);
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          const memories = result.memories || result.data || [];
+          allMemories.push(...memories);
+          if (memories.length < pageSize) break;
+          offset += pageSize;
+        }
+        
+        const total = allMemories.length;
+        const pinned = allMemories.filter(m => m.pinned).length;
+        const now = new Date();
+        const expiringSoon = allMemories.filter(m => {
+          if (!m.expires_at) return false;
+          const exp = new Date(m.expires_at);
+          const daysUntil = (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+          return daysUntil > 0 && daysUntil < 7;
+        }).length;
+        
+        const byType: Record<string, number> = {};
+        for (const m of allMemories) {
+          const t = m.memory_type || 'general';
+          byType[t] = (byType[t] || 0) + 1;
+        }
+        
+        const byNamespace: Record<string, number> = {};
+        for (const m of allMemories) {
+          const ns = m.namespace || '(default)';
+          byNamespace[ns] = (byNamespace[ns] || 0) + 1;
+        }
+        
+        const importanceLow = allMemories.filter(m => m.importance !== undefined && m.importance < 0.33).length;
+        const importanceMed = allMemories.filter(m => m.importance !== undefined && m.importance >= 0.33 && m.importance < 0.66).length;
+        const importanceHigh = allMemories.filter(m => m.importance !== undefined && m.importance >= 0.66).length;
+        
+        const lines = [
+          `📊 Memory Statistics${namespace ? ` (${namespace})` : ''}:`,
+          `  Total memories: ${total}`,
+          `  Pinned: ${pinned}`,
+          `  Expiring soon (7 days): ${expiringSoon}`,
+          ``,
+          `  By importance:`,
+          `    High (0.66-1.0): ${importanceHigh}`,
+          `    Medium (0.33-0.66): ${importanceMed}`,
+          `    Low (0-0.33): ${importanceLow}`,
+          ``,
+          `  By type:`,
+          ...Object.entries(byType).map(([t, c]) => `    ${t}: ${c}`),
+          ``,
+          `  By namespace:`,
+          ...Object.entries(byNamespace).map(([ns, c]) => `    ${ns}: ${c}`),
+        ];
+        
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
 
       default:
