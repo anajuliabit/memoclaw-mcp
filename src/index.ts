@@ -101,6 +101,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           importance: { type: 'number', description: 'Importance score 0-1 (default 0.5)' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           namespace: { type: 'string', description: 'Namespace for organization' },
+          memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type (affects decay rate)' },
+          session_id: { type: 'string', description: 'Session identifier' },
+          agent_id: { type: 'string', description: 'Agent identifier' },
+          expires_at: { type: 'string', description: 'Expiry date (ISO 8601)' },
+          pinned: { type: 'boolean', description: 'Pin memory (exempt from decay)' },
         },
         required: ['content'],
       },
@@ -261,13 +266,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'memoclaw_store': {
-        const { content, importance, tags, namespace } = args as any;
-        const result = await makeRequest('POST', '/v1/store', {
-          content,
-          importance,
-          metadata: tags ? { tags } : undefined,
-          namespace,
-        });
+        const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned } = args as any;
+        const body: any = { content };
+        if (importance !== undefined) body.importance = importance;
+        if (tags) body.metadata = { tags };
+        if (namespace) body.namespace = namespace;
+        if (memory_type) body.memory_type = memory_type;
+        if (session_id) body.session_id = session_id;
+        if (agent_id) body.agent_id = agent_id;
+        if (expires_at) body.expires_at = expires_at;
+        if (pinned !== undefined) body.pinned = pinned;
+        const result = await makeRequest('POST', '/v1/store', body);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
