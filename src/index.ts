@@ -46,9 +46,12 @@ async function getWalletAuthHeader(): Promise<string> {
 
 async function makeRequest(method: string, path: string, body?: any) {
   const url = `${API_URL}${path}`;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {};
   const options: RequestInit = { method, headers };
-  if (body) options.body = JSON.stringify(body);
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
 
   // Try free tier first
   const walletAuth = await getWalletAuthHeader();
@@ -84,7 +87,7 @@ async function makeRequest(method: string, path: string, body?: any) {
 }
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.2.0' },
+  { name: 'memoclaw', version: '1.3.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -288,7 +291,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned } = args as any;
         const body: any = { content };
         if (importance !== undefined) body.importance = importance;
-        if (tags) body.metadata = { tags };
+        if (tags) body.tags = tags;
         if (namespace) body.namespace = namespace;
         if (memory_type) body.memory_type = memory_type;
         if (session_id) body.session_id = session_id;
@@ -316,20 +319,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           include_relations,
         });
         
-        // Format results nicely
+        // Format results with both human-readable summary and full JSON
         const memories = result.memories || [];
+        if (memories.length === 0) {
+          return { content: [{ type: 'text', text: 'No memories found' }] };
+        }
         const formatted = memories.map((m: any) => 
-          `[${m.similarity?.toFixed(3) || '?'}] ${m.content}\n  tags: ${m.metadata?.tags?.join(', ') || 'none'}`
+          `[${m.similarity?.toFixed(3) || '?'}] (${m.id}) ${m.content}\n  tags: ${m.tags?.join(', ') || m.metadata?.tags?.join(', ') || 'none'}`
         ).join('\n\n');
         
-        return { content: [{ type: 'text', text: formatted || 'No memories found' }] };
+        return { content: [{ type: 'text', text: `${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
       }
 
       case 'memoclaw_list': {
         const { limit, offset, tags, namespace, session_id, agent_id } = args as any;
         const params = new URLSearchParams();
-        if (limit) params.set('limit', String(limit));
-        if (offset) params.set('offset', String(offset));
+        if (limit !== undefined) params.set('limit', String(limit));
+        if (offset !== undefined) params.set('offset', String(offset));
         if (namespace) params.set('namespace', namespace);
         if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));
         if (session_id) params.set('session_id', session_id);
@@ -346,22 +352,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memoclaw_status': {
-        const walletAuth = await getWalletAuthHeader();
-        const res = await fetch(`${API_URL}/v1/free-tier/status`, {
-          headers: { 'x-wallet-auth': walletAuth }
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          return {
-            content: [{
-              type: 'text',
-              text: `Wallet: ${data.wallet}\nFree tier: ${data.free_tier_remaining}/${data.free_tier_total} calls remaining`
-            }]
-          };
-        } else {
-          throw new Error('Failed to get status');
-        }
+        const data = await makeRequest('GET', '/v1/free-tier/status');
+        return {
+          content: [{
+            type: 'text',
+            text: `Wallet: ${data.wallet}\nFree tier: ${data.free_tier_remaining}/${data.free_tier_total} calls remaining`
+          }]
+        };
       }
 
       case 'memoclaw_ingest': {
@@ -399,7 +396,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'memoclaw_suggested': {
         const { limit, namespace, session_id, agent_id, category } = args as any;
         const params = new URLSearchParams();
-        if (limit) params.set('limit', String(limit));
+        if (limit !== undefined) params.set('limit', String(limit));
         if (namespace) params.set('namespace', namespace);
         if (session_id) params.set('session_id', session_id);
         if (agent_id) params.set('agent_id', agent_id);

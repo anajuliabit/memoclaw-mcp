@@ -37,10 +37,12 @@ async function getWalletAuthHeader() {
 }
 async function makeRequest(method, path, body) {
     const url = `${API_URL}${path}`;
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = {};
     const options = { method, headers };
-    if (body)
+    if (body) {
+        headers['Content-Type'] = 'application/json';
         options.body = JSON.stringify(body);
+    }
     // Try free tier first
     const walletAuth = await getWalletAuthHeader();
     headers['x-wallet-auth'] = walletAuth;
@@ -64,7 +66,7 @@ async function makeRequest(method, path, body) {
     }
     return res.json();
 }
-const server = new Server({ name: 'memoclaw', version: '1.1.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'memoclaw', version: '1.3.0' }, { capabilities: { tools: {} } });
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
@@ -78,6 +80,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                     importance: { type: 'number', description: 'Importance score 0-1 (default 0.5)' },
                     tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
                     namespace: { type: 'string', description: 'Namespace for organization' },
+                    memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type for decay scheduling (default: general)' },
+                    session_id: { type: 'string', description: 'Associate with a session' },
+                    agent_id: { type: 'string', description: 'Associate with an agent' },
+                    pinned: { type: 'boolean', description: 'Pin memory to exempt from decay' },
+                    expires_at: { type: 'string', description: 'ISO 8601 expiry date' },
                 },
                 required: ['content'],
             },
@@ -93,6 +100,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                     min_similarity: { type: 'number', description: 'Min similarity threshold 0-1' },
                     tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
                     namespace: { type: 'string', description: 'Filter by namespace' },
+                    memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Filter by memory type' },
+                    session_id: { type: 'string', description: 'Filter by session' },
+                    agent_id: { type: 'string', description: 'Filter by agent' },
+                    include_relations: { type: 'boolean', description: 'Include memory relations in response' },
+                    after: { type: 'string', description: 'Only return memories created after this ISO date' },
                 },
                 required: ['query'],
             },
@@ -105,8 +117,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 properties: {
                     limit: { type: 'number', description: 'Max results (default 20)' },
                     offset: { type: 'number', description: 'Pagination offset' },
-                    tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
+                    tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags (comma-separated in query)' },
                     namespace: { type: 'string', description: 'Filter by namespace' },
+                    session_id: { type: 'string', description: 'Filter by session' },
+                    agent_id: { type: 'string', description: 'Filter by agent' },
                 },
             },
         },
@@ -131,28 +145,113 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         {
             name: 'memoclaw_ingest',
-            description: 'Ingest a conversation or text and auto-extract + relate memories. Zero-effort: just send messages and MemoClaw handles extraction, storage, deduplication, and relationship creation.',
+            description: 'Zero-effort ingestion: dump a conversation or raw text, get extracted facts, dedup, and auto-relations. Free tier: 1000 calls per wallet.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    messages: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            properties: {
-                                role: { type: 'string', description: 'Message role (user, assistant, system)' },
-                                content: { type: 'string', description: 'Message content' },
-                            },
-                            required: ['role', 'content'],
-                        },
-                        description: 'Conversation messages to ingest',
-                    },
-                    text: { type: 'string', description: 'Raw text to ingest (alternative to messages)' },
-                    namespace: { type: 'string', description: 'Namespace for organization' },
-                    session_id: { type: 'string', description: 'Session ID for grouping' },
-                    agent_id: { type: 'string', description: 'Agent ID for attribution' },
-                    auto_relate: { type: 'boolean', description: 'Auto-create relations between co-extracted facts (default true)' },
+                    messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } }, description: 'Conversation messages' } },
+                    text: { type: 'string', description: 'Raw text to ingest' },
+                    namespace: { type: 'string', description: 'Namespace for memories' },
+                    session_id: { type: 'string', description: 'Session identifier' },
+                    agent_id: { type: 'string', description: 'Agent identifier' },
+                    auto_relate: { type: 'boolean', description: 'Auto-create relations between facts (default: true)' },
                 },
+            },
+        },
+        {
+            name: 'memoclaw_extract',
+            description: 'Extract structured facts from a conversation via LLM without auto-relating.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } }, description: 'Conversation messages' },
+                    namespace: { type: 'string', description: 'Namespace for memories' },
+                    session_id: { type: 'string', description: 'Session identifier' },
+                    agent_id: { type: 'string', description: 'Agent identifier' },
+                },
+                required: ['messages'],
+            },
+        },
+        {
+            name: 'memoclaw_consolidate',
+            description: 'Merge similar memories by clustering. Use dry_run to preview.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    namespace: { type: 'string', description: 'Namespace to consolidate' },
+                    min_similarity: { type: 'number', description: 'Minimum similarity threshold for clustering' },
+                    mode: { type: 'string', description: 'Consolidation mode' },
+                    dry_run: { type: 'boolean', description: 'Preview without merging' },
+                },
+            },
+        },
+        {
+            name: 'memoclaw_suggested',
+            description: 'Get proactive memory suggestions (stale, fresh, hot, decaying).',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    limit: { type: 'number', description: 'Max results' },
+                    namespace: { type: 'string', description: 'Filter by namespace' },
+                    session_id: { type: 'string', description: 'Session identifier' },
+                    agent_id: { type: 'string', description: 'Agent identifier' },
+                    category: { type: 'string', enum: ['stale', 'fresh', 'hot', 'decaying'], description: 'Filter by category' },
+                },
+            },
+        },
+        {
+            name: 'memoclaw_update',
+            description: 'Update a memory by ID. Only provided fields are changed.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', description: 'Memory ID to update' },
+                    content: { type: 'string', description: 'New content' },
+                    importance: { type: 'number', description: 'New importance score' },
+                    memory_type: { type: 'string', description: 'New memory type' },
+                    namespace: { type: 'string', description: 'New namespace' },
+                    metadata: { type: 'object', description: 'New metadata' },
+                    expires_at: { type: 'string', description: 'New expiry (ISO date or null)' },
+                    pinned: { type: 'boolean', description: 'Pin/unpin memory' },
+                },
+                required: ['id'],
+            },
+        },
+        {
+            name: 'memoclaw_create_relation',
+            description: 'Create a relationship between two memories.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    memory_id: { type: 'string', description: 'Source memory ID' },
+                    target_id: { type: 'string', description: 'Target memory ID' },
+                    relation_type: { type: 'string', enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'], description: 'Relation type' },
+                    metadata: { type: 'object', description: 'Optional metadata' },
+                },
+                required: ['memory_id', 'target_id', 'relation_type'],
+            },
+        },
+        {
+            name: 'memoclaw_list_relations',
+            description: 'List all relationships for a memory.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    memory_id: { type: 'string', description: 'Memory ID' },
+                },
+                required: ['memory_id'],
+            },
+        },
+        {
+            name: 'memoclaw_delete_relation',
+            description: 'Delete a relationship between two memories.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    memory_id: { type: 'string', description: 'Source memory ID' },
+                    relation_id: { type: 'string', description: 'Relation ID to delete' },
+                },
+                required: ['memory_id', 'relation_id'],
             },
         },
     ],
@@ -163,38 +262,69 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
         switch (name) {
             case 'memoclaw_store': {
-                const { content, importance, tags, namespace } = args;
-                const result = await makeRequest('POST', '/v1/store', {
-                    content,
-                    importance,
-                    metadata: tags ? { tags } : undefined,
-                    namespace,
-                });
+                const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned } = args;
+                const body = { content };
+                if (importance !== undefined)
+                    body.importance = importance;
+                if (tags)
+                    body.tags = tags;
+                if (namespace)
+                    body.namespace = namespace;
+                if (memory_type)
+                    body.memory_type = memory_type;
+                if (session_id)
+                    body.session_id = session_id;
+                if (agent_id)
+                    body.agent_id = agent_id;
+                if (expires_at)
+                    body.expires_at = expires_at;
+                if (pinned !== undefined)
+                    body.pinned = pinned;
+                const result = await makeRequest('POST', '/v1/store', body);
                 return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
             }
             case 'memoclaw_recall': {
-                const { query, limit, min_similarity, tags, namespace } = args;
+                const { query, limit, min_similarity, tags, namespace, memory_type, session_id, agent_id, include_relations, after } = args;
+                const filters = {};
+                if (tags)
+                    filters.tags = tags;
+                if (memory_type)
+                    filters.memory_type = memory_type;
+                if (after)
+                    filters.after = after;
                 const result = await makeRequest('POST', '/v1/recall', {
                     query,
                     limit,
                     min_similarity,
-                    filters: tags ? { tags } : undefined,
+                    filters: Object.keys(filters).length > 0 ? filters : undefined,
                     namespace,
+                    session_id,
+                    agent_id,
+                    include_relations,
                 });
-                // Format results nicely
+                // Format results with both human-readable summary and full JSON
                 const memories = result.memories || [];
-                const formatted = memories.map((m) => `[${m.similarity?.toFixed(3) || '?'}] ${m.content}\n  tags: ${m.metadata?.tags?.join(', ') || 'none'}`).join('\n\n');
-                return { content: [{ type: 'text', text: formatted || 'No memories found' }] };
+                if (memories.length === 0) {
+                    return { content: [{ type: 'text', text: 'No memories found' }] };
+                }
+                const formatted = memories.map((m) => `[${m.similarity?.toFixed(3) || '?'}] (${m.id}) ${m.content}\n  tags: ${m.tags?.join(', ') || m.metadata?.tags?.join(', ') || 'none'}`).join('\n\n');
+                return { content: [{ type: 'text', text: `${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
             }
             case 'memoclaw_list': {
-                const { limit, offset, tags, namespace } = args;
+                const { limit, offset, tags, namespace, session_id, agent_id } = args;
                 const params = new URLSearchParams();
-                if (limit)
+                if (limit !== undefined)
                     params.set('limit', String(limit));
-                if (offset)
+                if (offset !== undefined)
                     params.set('offset', String(offset));
                 if (namespace)
                     params.set('namespace', namespace);
+                if (tags && Array.isArray(tags) && tags.length > 0)
+                    params.set('tags', tags.join(','));
+                if (session_id)
+                    params.set('session_id', session_id);
+                if (agent_id)
+                    params.set('agent_id', agent_id);
                 const result = await makeRequest('GET', `/v1/memories?${params}`);
                 return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
             }
@@ -204,48 +334,86 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
             }
             case 'memoclaw_status': {
-                const walletAuth = await getWalletAuthHeader();
-                const res = await fetch(`${API_URL}/v1/free-tier/status`, {
-                    headers: { 'x-wallet-auth': walletAuth }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    return {
-                        content: [{
-                                type: 'text',
-                                text: `Wallet: ${data.wallet}\nFree tier: ${data.free_tier_remaining}/${data.free_tier_total} calls remaining`
-                            }]
-                    };
-                }
-                else {
-                    throw new Error('Failed to get status');
-                }
+                const data = await makeRequest('GET', '/v1/free-tier/status');
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `Wallet: ${data.wallet}\nFree tier: ${data.free_tier_remaining}/${data.free_tier_total} calls remaining`
+                        }]
+                };
             }
             case 'memoclaw_ingest': {
                 const { messages, text, namespace, session_id, agent_id, auto_relate } = args;
+                const result = await makeRequest('POST', '/v1/ingest', {
+                    messages,
+                    text,
+                    namespace,
+                    session_id,
+                    agent_id,
+                    auto_relate: auto_relate !== false,
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+            }
+            case 'memoclaw_extract': {
+                const { messages, namespace, session_id, agent_id } = args;
+                const result = await makeRequest('POST', '/v1/memories/extract', {
+                    messages, namespace, session_id, agent_id,
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+            }
+            case 'memoclaw_consolidate': {
+                const { namespace, min_similarity, mode, dry_run } = args;
                 const body = {};
-                if (messages)
-                    body.messages = messages;
-                if (text)
-                    body.text = text;
                 if (namespace)
                     body.namespace = namespace;
+                if (min_similarity !== undefined)
+                    body.min_similarity = min_similarity;
+                if (mode)
+                    body.mode = mode;
+                if (dry_run !== undefined)
+                    body.dry_run = dry_run;
+                const result = await makeRequest('POST', '/v1/memories/consolidate', body);
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+            }
+            case 'memoclaw_suggested': {
+                const { limit, namespace, session_id, agent_id, category } = args;
+                const params = new URLSearchParams();
+                if (limit !== undefined)
+                    params.set('limit', String(limit));
+                if (namespace)
+                    params.set('namespace', namespace);
                 if (session_id)
-                    body.session_id = session_id;
+                    params.set('session_id', session_id);
                 if (agent_id)
-                    body.agent_id = agent_id;
-                if (auto_relate !== undefined)
-                    body.auto_relate = auto_relate;
-                const result = await makeRequest('POST', '/v1/ingest', body);
-                const summary = [
-                    `Facts extracted: ${result.facts_extracted}`,
-                    `Facts stored: ${result.facts_stored}`,
-                    `Facts deduplicated: ${result.facts_deduplicated}`,
-                    `Relations created: ${result.relations_created}`,
-                    `Memory IDs: ${result.memory_ids?.join(', ') || 'none'}`,
-                    `Tokens used: ${result.tokens_used}`,
-                ].join('\n');
-                return { content: [{ type: 'text', text: summary }] };
+                    params.set('agent_id', agent_id);
+                if (category)
+                    params.set('category', category);
+                const qs = params.toString();
+                const result = await makeRequest('GET', `/v1/suggested${qs ? '?' + qs : ''}`);
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+            }
+            case 'memoclaw_update': {
+                const { id, ...updateFields } = args;
+                const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+            }
+            case 'memoclaw_create_relation': {
+                const { memory_id, target_id, relation_type, metadata } = args;
+                const body = { target_id, relation_type };
+                if (metadata)
+                    body.metadata = metadata;
+                const result = await makeRequest('POST', `/v1/memories/${memory_id}/relations`, body);
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+            }
+            case 'memoclaw_list_relations': {
+                const { memory_id } = args;
+                const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+            }
+            case 'memoclaw_delete_relation': {
+                const { memory_id, relation_id } = args;
+                const result = await makeRequest('DELETE', `/v1/memories/${memory_id}/relations/${relation_id}`);
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
             }
             default:
                 throw new Error(`Unknown tool: ${name}`);

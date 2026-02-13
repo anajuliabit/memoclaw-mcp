@@ -92,9 +92,10 @@ describe('MCP Server Tool Definitions', () => {
     expect(toolNames).toContain('memoclaw_update');
     expect(toolNames).toContain('memoclaw_create_relation');
     expect(toolNames).toContain('memoclaw_list_relations');
+    expect(toolNames).toContain('memoclaw_delete_relation');
   });
 
-  it('should have 12 tools total', async () => {
+  it('should have 13 tools total', async () => {
     const result = await listToolsHandler();
     expect(result.tools).toHaveLength(13);
   });
