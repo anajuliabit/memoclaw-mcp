@@ -460,6 +460,21 @@ const TOOLS = [
     },
   },
   {
+    name: 'memoclaw_delete_namespace',
+    description:
+      'Delete ALL memories in a namespace. This is destructive and cannot be undone. ' +
+      'Use memoclaw_count first to see how many memories will be affected. ' +
+      'Requires the namespace parameter — will not delete unnamespaced memories.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        namespace: { type: 'string', description: 'The namespace whose memories will be deleted. All memories in this namespace are permanently removed.' },
+        agent_id: { type: 'string', description: 'Only delete memories from this agent within the namespace.' },
+      },
+      required: ['namespace'],
+    },
+  },
+  {
     name: 'memoclaw_graph',
     description:
       'Traverse the memory graph starting from a given memory. Returns the memory and its connected ' +
@@ -785,9 +800,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             throw new Error(`Memory at index ${i} has empty content`);
           }
         }
+        const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at'];
         const results = await Promise.allSettled(
           memories.map((m: any) => {
-            const body: any = { ...m };
+            const body: any = {};
+            for (const key of STORE_FIELDS) {
+              if (m[key] !== undefined) body[key] = m[key];
+            }
             if (session_id) body.session_id = session_id;
             if (agent_id) body.agent_id = agent_id;
             return makeRequest('POST', '/v1/store', body);
@@ -820,6 +839,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, tags?.length && `tags=${tags.join(',')}`].filter(Boolean);
         const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
         return { content: [{ type: 'text', text: `📊 Total memories${filterStr}: ${total}` }] };
+      }
+
+      case 'memoclaw_delete_namespace': {
+        const { namespace, agent_id } = args as any;
+        if (!namespace) throw new Error('namespace is required');
+        
+        // Paginate through all memories in namespace and delete them
+        const deletedIds: string[] = [];
+        const errors: string[] = [];
+        let offset = 0;
+        const pageSize = 100;
+        
+        while (true) {
+          const params = new URLSearchParams();
+          params.set('limit', String(pageSize));
+          params.set('offset', String(offset));
+          params.set('namespace', namespace);
+          if (agent_id) params.set('agent_id', agent_id);
+          
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          const memories = result.memories || result.data || [];
+          if (memories.length === 0) break;
+          
+          const deleteResults = await Promise.allSettled(
+            memories.map((m: any) => makeRequest('DELETE', `/v1/memories/${m.id}`))
+          );
+          
+          for (let i = 0; i < deleteResults.length; i++) {
+            if (deleteResults[i].status === 'fulfilled') {
+              deletedIds.push(memories[i].id);
+            } else {
+              errors.push(`${memories[i].id}: ${(deleteResults[i] as PromiseRejectedResult).reason?.message || 'unknown'}`);
+            }
+          }
+          
+          // If we got fewer than pageSize, we're done
+          if (memories.length < pageSize) break;
+          // Don't increment offset since we're deleting, but add safety valve
+          if (deletedIds.length + errors.length > 10000) break;
+        }
+        
+        let text = `🗑️ Namespace "${namespace}": ${deletedIds.length} memories deleted`;
+        if (errors.length > 0) text += `, ${errors.length} failed\n\nErrors:\n${errors.slice(0, 10).join('\n')}`;
+        return { content: [{ type: 'text', text }] };
       }
 
       case 'memoclaw_graph': {

@@ -92,13 +92,20 @@ describe('Tool Definitions', () => {
       'memoclaw_consolidate', 'memoclaw_suggested',
       'memoclaw_create_relation', 'memoclaw_list_relations', 'memoclaw_delete_relation',
       'memoclaw_export', 'memoclaw_import', 'memoclaw_bulk_store', 'memoclaw_count',
-      'memoclaw_graph',
+      'memoclaw_delete_namespace', 'memoclaw_graph',
     ]));
   });
 
-  it('has 20 tools total', async () => {
+  it('has 21 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(20);
+    expect(result.tools).toHaveLength(21);
+  });
+
+  it('delete_namespace requires namespace', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_delete_namespace');
+    expect(tool).toBeDefined();
+    expect(tool.inputSchema.required).toContain('namespace');
   });
 
   it('store requires content', async () => {
@@ -872,6 +879,72 @@ describe('Tool Handlers', () => {
     // Should only include supersedes edge, not related_to
     expect(result.content[0].text).toContain('supersedes');
     expect(result.content[0].text).not.toContain('related_to');
+  });
+
+  // --- Delete Namespace ---
+
+  it('delete_namespace requires namespace', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_delete_namespace', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('namespace is required');
+  });
+
+  it('delete_namespace deletes all memories in namespace', async () => {
+    let callNum = 0;
+    globalThis.fetch = vi.fn().mockImplementation((url: string, opts: any) => {
+      callNum++;
+      if (opts?.method === 'DELETE') {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ deleted: true }),
+          text: () => Promise.resolve(''),
+          headers: new Headers(),
+        });
+      }
+      // First list returns 2 memories, second returns empty
+      if (callNum <= 1) {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ memories: [{ id: 'a' }, { id: 'b' }] }),
+          text: () => Promise.resolve(''),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ memories: [] }),
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      });
+    });
+
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_delete_namespace', arguments: { namespace: 'test-ns' } },
+    });
+    expect(result.content[0].text).toContain('2 memories deleted');
+    expect(result.content[0].text).toContain('test-ns');
+  });
+
+  it('delete_namespace with empty namespace has no deletions', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_delete_namespace', arguments: { namespace: 'empty-ns' } },
+    });
+    expect(result.content[0].text).toContain('0 memories deleted');
+  });
+
+  // --- Bulk Store field whitelisting ---
+
+  it('bulk_store does not leak extra fields to API', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+    await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'ok', extra_bad_field: 'should not appear' }] } },
+    });
+    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    expect(body.content).toBe('ok');
+    expect(body.extra_bad_field).toBeUndefined();
   });
 
   it('graph handles fetch errors gracefully', async () => {
