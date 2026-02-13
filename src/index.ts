@@ -296,6 +296,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (limit) params.set('limit', String(limit));
         if (offset) params.set('offset', String(offset));
         if (namespace) params.set('namespace', namespace);
+        if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));
         
         const result = await makeRequest('GET', `/v1/memories?${params}`);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
