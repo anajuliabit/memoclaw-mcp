@@ -90,7 +90,7 @@ function formatMemory(m) {
         parts.push(`  created: ${m.created_at}`);
     return parts.join('\n');
 }
-const server = new Server({ name: 'memoclaw', version: '1.4.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'memoclaw', version: '1.5.0' }, { capabilities: { tools: {} } });
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 const TOOLS = [
     {
@@ -335,6 +335,51 @@ const TOOLS = [
             },
         },
     },
+    {
+        name: 'memoclaw_bulk_store',
+        description: 'Store multiple memories in a single call. More efficient than calling memoclaw_store in a loop. ' +
+            'Each memory in the array can have its own tags, namespace, importance, etc. Max 50 memories per call. ' +
+            'Returns the list of created memory objects with their IDs.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                memories: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            content: { type: 'string', description: 'The text content to remember.' },
+                            importance: { type: 'number', description: 'Importance score (0.0-1.0). Default: 0.5.' },
+                            tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization.' },
+                            namespace: { type: 'string', description: 'Namespace to isolate this memory.' },
+                            memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type.' },
+                            pinned: { type: 'boolean', description: 'Pin to prevent decay.' },
+                        },
+                        required: ['content'],
+                    },
+                    description: 'Array of memory objects to store. Each must have at least a "content" field. Max 50.',
+                },
+                session_id: { type: 'string', description: 'Session ID applied to all memories.' },
+                agent_id: { type: 'string', description: 'Agent ID applied to all memories.' },
+            },
+            required: ['memories'],
+        },
+    },
+    {
+        name: 'memoclaw_count',
+        description: 'Get a count of memories, optionally filtered by namespace, tags, or agent_id. ' +
+            'Faster than memoclaw_list when you only need the total number. ' +
+            'Useful for monitoring memory usage or checking if a namespace has any memories.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                namespace: { type: 'string', description: 'Count only memories in this namespace.' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Count only memories with ALL of these tags.' },
+                agent_id: { type: 'string', description: 'Count only memories from this agent.' },
+                memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Count only memories of this type.' },
+            },
+        },
+    },
 ];
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
@@ -520,7 +565,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     params.set('category', category);
                 const qs = params.toString();
                 const result = await makeRequest('GET', `/v1/suggested${qs ? '?' + qs : ''}`);
-                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+                const suggestions = result.suggestions || result.memories || [];
+                if (suggestions.length === 0) {
+                    return { content: [{ type: 'text', text: `No suggestions found${category ? ` for category "${category}"` : ''}.` }] };
+                }
+                const formatted = suggestions.map((m) => formatMemory(m)).join('\n\n');
+                return { content: [{ type: 'text', text: `💡 ${suggestions.length} suggestions${category ? ` (${category})` : ''}:\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
             }
             case 'memoclaw_update': {
                 const { id, ...updateFields } = args;
@@ -545,7 +595,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (!memory_id)
                     throw new Error('memory_id is required');
                 const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
-                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+                const relations = result.relations || [];
+                if (relations.length === 0) {
+                    return { content: [{ type: 'text', text: `No relations found for memory ${memory_id}.` }] };
+                }
+                const formatted = relations.map((r) => `🔗 ${r.id || '?'}: ${r.source_id || memory_id} —[${r.relation_type}]→ ${r.target_id}`).join('\n');
+                return { content: [{ type: 'text', text: `Relations for ${memory_id}:\n${formatted}\n\n${JSON.stringify(result, null, 2)}` }] };
             }
             case 'memoclaw_delete_relation': {
                 const { memory_id, relation_id } = args;
@@ -553,6 +608,61 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     throw new Error('memory_id and relation_id are required');
                 const result = await makeRequest('DELETE', `/v1/memories/${memory_id}/relations/${relation_id}`);
                 return { content: [{ type: 'text', text: `🗑️ Relation ${relation_id} deleted\n\n${JSON.stringify(result, null, 2)}` }] };
+            }
+            case 'memoclaw_bulk_store': {
+                const { memories, session_id, agent_id } = args;
+                if (!memories || !Array.isArray(memories) || memories.length === 0) {
+                    throw new Error('memories is required and must be a non-empty array');
+                }
+                if (memories.length > 50) {
+                    throw new Error('Maximum 50 memories per bulk store call');
+                }
+                for (const [i, m] of memories.entries()) {
+                    if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
+                        throw new Error(`Memory at index ${i} has empty content`);
+                    }
+                }
+                // Store in parallel
+                const results = await Promise.allSettled(memories.map((m) => {
+                    const body = { ...m };
+                    if (session_id)
+                        body.session_id = session_id;
+                    if (agent_id)
+                        body.agent_id = agent_id;
+                    return makeRequest('POST', '/v1/store', body);
+                }));
+                const succeeded = results.filter(r => r.status === 'fulfilled');
+                const failed = results.filter(r => r.status === 'rejected');
+                const stored = succeeded.map(r => r.value?.memory || r.value);
+                const errors = failed.map((r, i) => {
+                    const idx = results.indexOf(r);
+                    return `index ${idx}: ${r.reason?.message || 'unknown error'}`;
+                });
+                let text = `✅ Bulk store: ${succeeded.length} stored, ${failed.length} failed`;
+                if (stored.length > 0)
+                    text += `\n\n${stored.map((m) => formatMemory(m)).join('\n\n')}`;
+                if (errors.length > 0)
+                    text += `\n\nErrors:\n${errors.join('\n')}`;
+                return { content: [{ type: 'text', text }] };
+            }
+            case 'memoclaw_count': {
+                const { namespace, tags, agent_id, memory_type } = args;
+                const params = new URLSearchParams();
+                params.set('limit', '1');
+                params.set('offset', '0');
+                if (namespace)
+                    params.set('namespace', namespace);
+                if (tags && Array.isArray(tags) && tags.length > 0)
+                    params.set('tags', tags.join(','));
+                if (agent_id)
+                    params.set('agent_id', agent_id);
+                if (memory_type)
+                    params.set('memory_type', memory_type);
+                const result = await makeRequest('GET', `/v1/memories?${params}`);
+                const total = result.total ?? (result.memories || result.data || []).length;
+                const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, tags?.length && `tags=${tags.join(',')}`].filter(Boolean);
+                const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
+                return { content: [{ type: 'text', text: `📊 Total memories${filterStr}: ${total}` }] };
             }
             case 'memoclaw_export': {
                 const { namespace, agent_id, format: fmt } = args;
