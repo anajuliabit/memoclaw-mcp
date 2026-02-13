@@ -28,5 +28,10 @@
     "semantic-search"
   ],
   "license": "MIT",
+  "author": "MemoClaw",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anajuliabit/memoclaw-mcp"
+  },
   "mcpName": "io.github.anajuliabit/memoclaw-mcp"
 }
