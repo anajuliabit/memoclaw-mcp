@@ -2,7 +2,7 @@
  * Tests for MemoClaw MCP server tool definitions and handler dispatch.
  * Mock fetch globally to avoid real API calls.
  */
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 
 process.env.MEMOCLAW_PRIVATE_KEY =
   '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
@@ -89,13 +89,13 @@ describe('Tool Definitions', () => {
       'memoclaw_status', 'memoclaw_ingest', 'memoclaw_extract',
       'memoclaw_consolidate', 'memoclaw_suggested',
       'memoclaw_create_relation', 'memoclaw_list_relations', 'memoclaw_delete_relation',
-      'memoclaw_export',
+      'memoclaw_export', 'memoclaw_bulk_store', 'memoclaw_count',
     ]));
   });
 
-  it('has 16 tools total', async () => {
+  it('has 18 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(16);
+    expect(result.tools).toHaveLength(18);
   });
 
   it('store requires content', async () => {
@@ -450,12 +450,105 @@ describe('Tool Handlers', () => {
 
   it('suggested builds query params correctly', async () => {
     globalThis.fetch = mockFetchOk({ suggestions: [] });
-    await callToolHandler({
+    const result = await callToolHandler({
       params: { name: 'memoclaw_suggested', arguments: { category: 'stale', limit: 5 } },
     });
     const url = (globalThis.fetch as any).mock.calls[0][0] as string;
     expect(url).toContain('category=stale');
     expect(url).toContain('limit=5');
+    expect(result.content[0].text).toContain('No suggestions found');
+  });
+
+  it('suggested formats results with category', async () => {
+    globalThis.fetch = mockFetchOk({ suggestions: [{ id: '1', content: 'old memory' }] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_suggested', arguments: { category: 'stale' } },
+    });
+    expect(result.content[0].text).toContain('1 suggestions');
+    expect(result.content[0].text).toContain('stale');
+    expect(result.content[0].text).toContain('old memory');
+  });
+
+  // bulk_store tests
+  it('bulk_store with empty array returns error', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('non-empty array');
+  });
+
+  it('bulk_store with >50 memories returns error', async () => {
+    const memories = Array.from({ length: 51 }, (_, i) => ({ content: `m${i}` }));
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Maximum 50');
+  });
+
+  it('bulk_store validates each memory has content', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'ok' }, { content: '' }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('index 1');
+  });
+
+  it('bulk_store succeeds', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'a' }, { content: 'b' }] } },
+    });
+    expect(result.content[0].text).toContain('2 stored');
+    expect(result.content[0].text).toContain('0 failed');
+  });
+
+  // count tests
+  it('count returns total', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1' }], total: 42 });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_count', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('42');
+  });
+
+  it('count with namespace filter', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [], total: 10 });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_count', arguments: { namespace: 'work' } },
+    });
+    expect(result.content[0].text).toContain('namespace=work');
+    expect(result.content[0].text).toContain('10');
+  });
+
+  // list_relations success path
+  it('list_relations returns formatted relations', async () => {
+    globalThis.fetch = mockFetchOk({ relations: [
+      { id: 'r1', source_id: 'a', target_id: 'b', relation_type: 'supersedes' },
+    ]});
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_list_relations', arguments: { memory_id: 'a' } },
+    });
+    expect(result.content[0].text).toContain('supersedes');
+    expect(result.content[0].text).toContain('r1');
+  });
+
+  it('list_relations with no relations', async () => {
+    globalThis.fetch = mockFetchOk({ relations: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_list_relations', arguments: { memory_id: 'a' } },
+    });
+    expect(result.content[0].text).toContain('No relations found');
+  });
+
+  // delete_relation success path
+  it('delete_relation succeeds', async () => {
+    globalThis.fetch = mockFetchOk({ deleted: true });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_delete_relation', arguments: { memory_id: 'a', relation_id: 'r1' } },
+    });
+    expect(result.content[0].text).toContain('deleted');
   });
 
   it('delete_relation validates required fields', async () => {
@@ -473,5 +566,3 @@ describe('Tool Handlers', () => {
   });
 });
 
-// Import afterEach for cleanup
-import { afterEach } from 'vitest';
