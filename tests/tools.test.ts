@@ -90,13 +90,13 @@ describe('Tool Definitions', () => {
       'memoclaw_consolidate', 'memoclaw_suggested',
       'memoclaw_create_relation', 'memoclaw_list_relations', 'memoclaw_delete_relation',
       'memoclaw_export', 'memoclaw_namespaces', 'memoclaw_tags',
-      'memoclaw_bulk_store', 'memoclaw_stats',
+      'memoclaw_bulk_store', 'memoclaw_stats', 'memoclaw_import', 'memoclaw_graph',
     ]));
   });
 
-  it('has 20 tools total', async () => {
+  it('has 22 tools total (20 original + import + graph)', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(20);
+    expect(result.tools).toHaveLength(22);
   });
 
   it('store requires content', async () => {
@@ -623,6 +623,135 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_stats', arguments: { namespace: 'work' } },
     });
     expect(result.content[0].text).toContain('(work)');
+  });
+
+  // Tests for new import tool
+  it('import requires memories array', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('non-empty array');
+  });
+
+  it('import validates max 200 items', async () => {
+    const memories = Array.from({ length: 201 }, (_, i) => ({ content: `memory ${i}` }));
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: { memories } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Maximum 200');
+  });
+
+  it('import validates each memory has content', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: { memories: [{ content: '' }, { content: 'valid' }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('content is required');
+  });
+
+  it('import succeeds with valid memories', async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ memory: { id: `m${callCount}`, content: `memory ${callCount}` } }),
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      });
+    });
+    const result = await callToolHandler({
+      params: { 
+        name: 'memoclaw_import', 
+        arguments: { 
+          memories: [
+            { content: 'memory 1', importance: 0.8 },
+            { content: 'memory 2', tags: ['test'] }
+          ] 
+        } 
+      },
+    });
+    expect(result.content[0].text).toContain('2 of 2 memories imported');
+    expect(callCount).toBe(2);
+  });
+
+  it('import with namespace override applies to all memories', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: 'm1', content: 'test' } });
+    await callToolHandler({
+      params: { 
+        name: 'memoclaw_import', 
+        arguments: { 
+          memories: [{ content: 'test' }],
+          namespace: 'work'
+        } 
+      },
+    });
+    const call = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.namespace).toBe('work');
+  });
+
+  // Tests for new graph tool
+  it('graph requires memory_id', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_graph', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('memory_id is required');
+  });
+
+  it('graph fetches related memories', async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // First call: get the starting memory
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ memory: { id: 'm1', content: 'original' } }),
+          text: () => Promise.resolve(''),
+          headers: new Headers(),
+        });
+      } else if (callCount === 2) {
+        // Second call: get relations
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ relations: [{ source_id: 'm1', target_id: 'm2', relation_type: 'supersedes' }] }),
+          text: () => Promise.resolve(''),
+          headers: new Headers(),
+        });
+      } else {
+        // Third call: get related memory
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ memory: { id: 'm2', content: 'new version' } }),
+          text: () => Promise.resolve(''),
+          headers: new Headers(),
+        });
+      }
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_graph', arguments: { memory_id: 'm1' } },
+    });
+    expect(result.content[0].text).toContain('related memories');
+    expect(callCount).toBe(3);
+  });
+
+  it('graph with no related memories returns appropriate message', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ memory: { id: 'm1', content: 'solo' }, relations: [] }),
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      });
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_graph', arguments: { memory_id: 'm1' } },
+    });
+    expect(result.content[0].text).toContain('No related memories found');
   });
 });
 

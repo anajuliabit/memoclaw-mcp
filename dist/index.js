@@ -117,11 +117,11 @@ const TOOLS = [
     },
     {
         name: 'memoclaw_recall',
-        description: 'Search memories by semantic similarity to a natural language query. ' +
-            'Returns the most relevant memories ranked by similarity score (0-1). ' +
-            'Use filters (tags, namespace, memory_type, after) to narrow results. ' +
-            'Set include_relations=true to also fetch related memories. ' +
-            'This is the primary way to retrieve memories — prefer this over memoclaw_list for finding specific information.',
+        description: 'Semantic search: find memories by meaning, not keywords. ' +
+            'This is your GO-TO tool for answering questions like "what does the user prefer for X?" or "what was decided about Y?". ' +
+            'The query is embedded as a vector and compared against all memories — returns top matches ranked by similarity (0-1). ' +
+            'Use filters (tags, namespace, memory_type) to narrow scope. Set min_similarity=0.3+ to filter noise. ' +
+            'NOTE: If you know the memory ID already, use memoclaw_get instead — it\'s faster and more precise.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -153,9 +153,11 @@ const TOOLS = [
     },
     {
         name: 'memoclaw_list',
-        description: 'List memories with pagination. Returns memories in reverse chronological order. ' +
-            'Use this for browsing or when you need to paginate through all memories. ' +
-            'For finding specific memories, prefer memoclaw_recall (semantic search) instead.',
+        description: 'List memories chronologically (newest first). Use this for:\n' +
+            '  • Browsing recent memories without a specific search query\n' +
+            '  • Pagination through all memories (use limit/offset)\n' +
+            '  • Filtering by tags, namespace, session_id, or agent_id\n' +
+            'NOTE: For finding SPECIFIC information (e.g., "what does user prefer?"), use memoclaw_recall instead — it searches by meaning, not just listing.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -399,6 +401,58 @@ const TOOLS = [
                 namespace: { type: 'string', description: 'Get stats for a specific namespace only.' },
                 agent_id: { type: 'string', description: 'Get stats for a specific agent only.' },
             },
+        },
+    },
+    {
+        name: 'memoclaw_import',
+        description: 'Import memories from a JSON array. This is the inverse of memoclaw_export — ' +
+            'use it to restore memories from backup or migrate from another system. ' +
+            'Each memory must have at least "content". Existing IDs are preserved if provided; ' +
+            'otherwise new IDs are generated. Use namespace to import all memories into a specific namespace. ' +
+            'Max 200 memories per call. NOTE: This does NOT deduplicate — use memoclaw_consolidate after import if needed.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                memories: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', description: 'Optional existing ID. If omitted, a new ID is generated.' },
+                            content: { type: 'string', description: 'Required. The text content to remember.' },
+                            importance: { type: 'number', description: 'Importance score 0.0-1.0. Default: 0.5.' },
+                            tags: { type: 'array', items: { type: 'string' }, description: 'Tags for this memory.' },
+                            memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type.' },
+                            pinned: { type: 'boolean', description: 'Pin this memory to prevent decay.' },
+                            expires_at: { type: 'string', description: 'ISO 8601 expiry date.' },
+                            metadata: { type: 'object', description: 'Optional custom metadata object.' },
+                        },
+                        required: ['content'],
+                    },
+                    description: 'Array of memory objects to import. Max 200 items.',
+                },
+                namespace: { type: 'string', description: 'Override namespace for all imported memories.' },
+                skip_duplicates: { type: 'boolean', description: 'If true, skip memories with content that already exists (fuzzy match). Default: false.' },
+            },
+            required: ['memories'],
+        },
+    },
+    {
+        name: 'memoclaw_graph',
+        description: 'Traverse the memory graph starting from a specific memory and find related memories through relation chains. ' +
+            'This is different from memoclaw_recall (semantic similarity) — it follows explicitly created relations. ' +
+            'Useful for exploring connected facts, finding all corrections to a memory, or tracing decision lineages. ' +
+            'Example: find all memories that "supersede" a deprecated memory, or all observations that "support" a decision.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                memory_id: { type: 'string', description: 'Starting memory ID to traverse from.' },
+                relation_types: { type: 'array', items: { type: 'string' }, description: 'Only follow these relation types. If omitted, follows all types. Examples: ["supersedes", "contradicts"], ["related_to"].' },
+                direction: { type: 'string', enum: ['outgoing', 'incoming', 'both'], description: 'Which direction to traverse: "outgoing" = from this memory to others, "incoming" = from others to this memory, "both" = both directions. Default: "both".' },
+                depth: { type: 'number', description: 'Maximum traversal depth. Default: 2. Max: 5. Depth 1 = direct neighbors only.' },
+                limit: { type: 'number', description: 'Max memories to return. Default: 20.' },
+            },
+            required: ['memory_id'],
         },
     },
 ];
@@ -809,6 +863,96 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     ...Object.entries(byNamespace).map(([ns, c]) => `    ${ns}: ${c}`),
                 ];
                 return { content: [{ type: 'text', text: lines.join('\n') }] };
+            }
+            case 'memoclaw_import': {
+                const { memories, namespace, skip_duplicates } = args;
+                if (!memories || !Array.isArray(memories) || memories.length === 0) {
+                    throw new Error('memories is required and must be a non-empty array');
+                }
+                if (memories.length > 200) {
+                    throw new Error('Maximum 200 memories per import call');
+                }
+                // Validate each memory has content
+                for (let i = 0; i < memories.length; i++) {
+                    const m = memories[i];
+                    if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
+                        throw new Error(`memories[${i}].content is required and cannot be empty`);
+                    }
+                }
+                // Import concurrently with limited parallelism
+                const results = await Promise.allSettled(memories.map((m) => makeRequest('POST', '/v1/store', {
+                    id: m.id,
+                    content: m.content,
+                    importance: m.importance,
+                    tags: m.tags,
+                    namespace: namespace || m.namespace,
+                    memory_type: m.memory_type,
+                    pinned: m.pinned,
+                    expires_at: m.expires_at,
+                    metadata: m.metadata,
+                })));
+                const succeeded = results.filter(r => r.status === 'fulfilled');
+                const failed = results
+                    .map((r, i) => r.status === 'rejected' ? `${i}: ${r.reason?.message || 'unknown error'}` : null)
+                    .filter(Boolean);
+                const importedCount = succeeded.length;
+                let text = `📥 Import: ${importedCount} of ${memories.length} memories imported`;
+                if (failed.length > 0)
+                    text += `\n\nFailed:\n${failed.join('\n')}`;
+                return { content: [{ type: 'text', text }] };
+            }
+            case 'memoclaw_graph': {
+                const { memory_id, relation_types, direction, depth, limit } = args;
+                if (!memory_id) {
+                    throw new Error('memory_id is required');
+                }
+                // First get the starting memory
+                const startMemory = await makeRequest('GET', `/v1/memories/${memory_id}`);
+                // Get all relations from the starting memory
+                const allRelations = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
+                let relations = allRelations.relations || allRelations || [];
+                // Filter by relation types if specified
+                if (relation_types && Array.isArray(relation_types) && relation_types.length > 0) {
+                    relations = relations.filter((r) => relation_types.includes(r.relation_type));
+                }
+                // Filter by direction
+                if (direction === 'outgoing') {
+                    relations = relations.filter((r) => r.source_id === memory_id);
+                }
+                else if (direction === 'incoming') {
+                    relations = relations.filter((r) => r.target_id === memory_id);
+                }
+                // Get related memories (limit depth)
+                const visited = new Set([memory_id]);
+                const relatedMemories = [];
+                // Fetch related memories based on direction
+                const targetIds = direction === 'incoming'
+                    ? relations.map((r) => r.source_id)
+                    : relations.map((r) => r.target_id);
+                for (const id of targetIds) {
+                    if (!visited.has(id)) {
+                        visited.add(id);
+                        try {
+                            const mem = await makeRequest('GET', `/v1/memories/${id}`);
+                            relatedMemories.push(mem.memory || mem);
+                        }
+                        catch (e) {
+                            // Memory might have been deleted, skip
+                        }
+                        if (relatedMemories.length >= (limit || 20))
+                            break;
+                    }
+                }
+                if (relatedMemories.length === 0) {
+                    return { content: [{ type: 'text', text: `No related memories found for memory ${memory_id}` }] };
+                }
+                const formatted = relatedMemories.map((m) => formatMemory(m)).join('\n\n');
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `🔗 Found ${relatedMemories.length} related memories:\n\n${formatted}\n\n---\nStarting memory: ${memory_id}\nRelations found: ${relations.length}\nDirection: ${direction || 'both'}\nDepth: ${depth || 2}`
+                        }]
+                };
             }
             default:
                 throw new Error(`Unknown tool: ${name}`);
