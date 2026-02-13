@@ -63,12 +63,15 @@ Once configured, Claude can use commands like:
 
 ## Pricing
 
+**Free Tier:** Every wallet gets **1000 free API calls** — no payment required.
+
+After the free tier:
 - Store: $0.001 per memory
 - Recall: $0.001 per query
 - List: $0.0005
 - Delete: $0.0001
 
-Paid with USDC on Base via x402 protocol.
+Paid with USDC on Base via x402 protocol. The server handles payment automatically.
 
 ## Links
 
