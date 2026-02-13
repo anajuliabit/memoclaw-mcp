@@ -101,6 +101,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           importance: { type: 'number', description: 'Importance score 0-1 (default 0.5)' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           namespace: { type: 'string', description: 'Namespace for organization' },
+          memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type for decay scheduling (default: general)' },
+          session_id: { type: 'string', description: 'Associate with a session' },
+          agent_id: { type: 'string', description: 'Associate with an agent' },
+          pinned: { type: 'boolean', description: 'Pin memory to exempt from decay' },
+          expires_at: { type: 'string', description: 'ISO 8601 expiry date' },
         },
         required: ['content'],
       },
@@ -261,12 +266,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'memoclaw_store': {
-        const { content, importance, tags, namespace } = args as any;
+        const { content, importance, tags, namespace, memory_type, session_id, agent_id, pinned, expires_at } = args as any;
         const result = await makeRequest('POST', '/v1/store', {
           content,
           importance,
           metadata: tags ? { tags } : undefined,
           namespace,
+          memory_type,
+          session_id,
+          agent_id,
+          pinned,
+          expires_at,
         });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
