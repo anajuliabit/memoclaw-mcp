@@ -101,11 +101,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           importance: { type: 'number', description: 'Importance score 0-1 (default 0.5)' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           namespace: { type: 'string', description: 'Namespace for organization' },
-          memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type (affects decay rate)' },
-          session_id: { type: 'string', description: 'Session identifier' },
-          agent_id: { type: 'string', description: 'Agent identifier' },
-          expires_at: { type: 'string', description: 'Expiry date (ISO 8601)' },
-          pinned: { type: 'boolean', description: 'Pin memory (exempt from decay)' },
+          memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Memory type for decay scheduling (default: general)' },
+          session_id: { type: 'string', description: 'Associate with a session' },
+          agent_id: { type: 'string', description: 'Associate with an agent' },
+          pinned: { type: 'boolean', description: 'Pin memory to exempt from decay' },
+          expires_at: { type: 'string', description: 'ISO 8601 expiry date' },
         },
         required: ['content'],
       },
@@ -121,6 +121,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           min_similarity: { type: 'number', description: 'Min similarity threshold 0-1' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
           namespace: { type: 'string', description: 'Filter by namespace' },
+          memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Filter by memory type' },
         },
         required: ['query'],
       },
@@ -281,12 +282,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memoclaw_recall': {
-        const { query, limit, min_similarity, tags, namespace } = args as any;
+        const { query, limit, min_similarity, tags, namespace, memory_type } = args as any;
+        const filters: Record<string, any> = {};
+        if (tags) filters.tags = tags;
+        if (memory_type) filters.memory_type = memory_type;
         const result = await makeRequest('POST', '/v1/recall', {
           query,
           limit,
           min_similarity,
-          filters: tags ? { tags } : undefined,
+          filters: Object.keys(filters).length > 0 ? filters : undefined,
           namespace,
         });
         
@@ -305,6 +309,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (limit) params.set('limit', String(limit));
         if (offset) params.set('offset', String(offset));
         if (namespace) params.set('namespace', namespace);
+        if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));
         
         const result = await makeRequest('GET', `/v1/memories?${params}`);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };

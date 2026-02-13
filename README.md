@@ -1,5 +1,9 @@
 # MemoClaw MCP Server
 
+[![CI](https://github.com/anajuliabit/memoclaw-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/anajuliabit/memoclaw-mcp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/memoclaw-mcp)](https://www.npmjs.com/package/memoclaw-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 MCP (Model Context Protocol) server for MemoClaw semantic memory API.
 
 ## Installation
