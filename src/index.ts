@@ -128,8 +128,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           limit: { type: 'number', description: 'Max results (default 20)' },
           offset: { type: 'number', description: 'Pagination offset' },
-          tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags (comma-separated in query)' },
           namespace: { type: 'string', description: 'Filter by namespace' },
+          session_id: { type: 'string', description: 'Filter by session' },
+          agent_id: { type: 'string', description: 'Filter by agent' },
         },
       },
     },
@@ -291,11 +293,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memoclaw_list': {
-        const { limit, offset, tags, namespace } = args as any;
+        const { limit, offset, tags, namespace, session_id, agent_id } = args as any;
         const params = new URLSearchParams();
         if (limit) params.set('limit', String(limit));
         if (offset) params.set('offset', String(offset));
         if (namespace) params.set('namespace', namespace);
+        if (tags && Array.isArray(tags)) params.set('tags', tags.join(','));
+        if (session_id) params.set('session_id', session_id);
+        if (agent_id) params.set('agent_id', agent_id);
         
         const result = await makeRequest('GET', `/v1/memories?${params}`);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
