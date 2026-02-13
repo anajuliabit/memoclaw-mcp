@@ -263,6 +263,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['memory_id'],
       },
     },
+    {
+      name: 'memoclaw_delete_relation',
+      description: 'Delete a relationship between two memories.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          memory_id: { type: 'string', description: 'Source memory ID' },
+          relation_id: { type: 'string', description: 'Relation ID to delete' },
+        },
+        required: ['memory_id', 'relation_id'],
+      },
+    },
   ],
 }));
 
@@ -414,6 +426,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'memoclaw_list_relations': {
         const { memory_id } = args as any;
         const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'memoclaw_delete_relation': {
+        const { memory_id, relation_id } = args as any;
+        const result = await makeRequest('DELETE', `/v1/memories/${memory_id}/relations/${relation_id}`);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
