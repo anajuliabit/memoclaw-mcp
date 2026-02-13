@@ -46,6 +46,12 @@ Add to MCP settings in Cursor preferences.
 | `memoclaw_delete` | Delete a memory by ID |
 | `memoclaw_status` | Check free tier remaining calls |
 | `memoclaw_ingest` | Zero-effort ingestion: dump conversations/text, auto-extract facts with dedup & relations |
+| `memoclaw_extract` | Extract structured facts from conversation via LLM |
+| `memoclaw_consolidate` | Merge similar memories by clustering |
+| `memoclaw_suggested` | Get proactive memory suggestions |
+| `memoclaw_update` | Update a memory by ID |
+| `memoclaw_create_relation` | Create a relationship between memories |
+| `memoclaw_list_relations` | List all relationships for a memory |
 
 ## Example Usage
 
@@ -66,8 +72,8 @@ Paid with USDC on Base via x402 protocol.
 
 ## Links
 
-- [MemoClaw Website](https://memoclaw.dev)
-- [MemoClaw Docs](https://docs.memoclaw.com)
+- [MemoClaw Website](https://memoclaw.com)
+- [MemoClaw Docs](https://memoclaw.com/docs)
 - [MCP Specification](https://modelcontextprotocol.io)
 
 ## License
