@@ -13,14 +13,50 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
+import { homedir } from 'node:os';
 
-const API_URL = process.env.MEMOCLAW_URL || 'https://api.memoclaw.com';
-const PRIVATE_KEY = process.env.MEMOCLAW_PRIVATE_KEY;
+/**
+ * Load config from ~/.memoclaw/config.json if it exists.
+ * Resolution order: explicit env var → config file → default.
+ */
+function loadConfig(): { privateKey: string; apiUrl: string; configSource: string } {
+  let privateKey = process.env.MEMOCLAW_PRIVATE_KEY || '';
+  let apiUrl = process.env.MEMOCLAW_URL || '';
+  let configSource = 'env';
 
-if (!PRIVATE_KEY) {
-  console.error('MEMOCLAW_PRIVATE_KEY environment variable required');
-  process.exit(1);
+  // Try config file if env vars are missing
+  if (!privateKey || !apiUrl) {
+    try {
+      const configPath = join(homedir(), '.memoclaw', 'config.json');
+      // Use synchronous read during startup (before async context)
+      const fs = require('node:fs');
+      const raw = fs.readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(raw);
+      if (!privateKey && config.privateKey) {
+        privateKey = config.privateKey;
+        configSource = 'config file (~/.memoclaw/config.json)';
+      }
+      if (!apiUrl && config.url) {
+        apiUrl = config.url;
+      }
+    } catch {
+      // Config file doesn't exist or is invalid — that's fine
+    }
+  }
+
+  if (!apiUrl) apiUrl = 'https://api.memoclaw.com';
+
+  if (!privateKey) {
+    console.error(
+      'MemoClaw: No private key found. Set MEMOCLAW_PRIVATE_KEY env var or run `memoclaw init`.'
+    );
+    process.exit(1);
+  }
+
+  return { privateKey, apiUrl, configSource };
 }
+
+const { privateKey: PRIVATE_KEY, apiUrl: API_URL, configSource: CONFIG_SOURCE } = loadConfig();
 
 // Wallet setup
 const account = privateKeyToAccount(PRIVATE_KEY as `0x${string}`);
@@ -119,7 +155,7 @@ const UPDATE_FIELDS = new Set([
 ]);
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.6.0' },
+  { name: 'memoclaw', version: '1.7.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -194,6 +230,7 @@ const TOOLS = [
         memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Only return memories of this type.' },
         session_id: { type: 'string', description: 'Only return memories from this session.' },
         agent_id: { type: 'string', description: 'Only return memories from this agent.' },
+        after: { type: 'string', description: 'Only return memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".' },
       },
       required: ['query'],
     },
@@ -229,6 +266,7 @@ const TOOLS = [
         memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Filter by memory type.' },
         session_id: { type: 'string', description: 'Filter by session ID.' },
         agent_id: { type: 'string', description: 'Filter by agent ID.' },
+        after: { type: 'string', description: 'Only return memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".' },
       },
     },
   },
@@ -623,7 +661,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memoclaw_search': {
-        const { query, limit, namespace, tags, memory_type, session_id, agent_id } = args as any;
+        const { query, limit, namespace, tags, memory_type, session_id, agent_id, after } = args as any;
         if (!query || (typeof query === 'string' && query.trim() === '')) {
           throw new Error('query is required and cannot be empty');
         }
@@ -636,6 +674,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (memory_type) params.set('memory_type', memory_type);
         if (session_id) params.set('session_id', session_id);
         if (agent_id) params.set('agent_id', agent_id);
+        if (after) params.set('after', after);
         
         const result = await makeRequest('GET', `/v1/memories/search?${params}`);
         const memories = result.memories || result.data || [];
@@ -655,7 +694,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memoclaw_list': {
-        const { limit, offset, tags, namespace, memory_type, session_id, agent_id } = args as any;
+        const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after } = args as any;
         const params = new URLSearchParams();
         if (limit !== undefined) params.set('limit', String(limit));
         if (offset !== undefined) params.set('offset', String(offset));
@@ -664,6 +703,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));
         if (session_id) params.set('session_id', session_id);
         if (agent_id) params.set('agent_id', agent_id);
+        if (after) params.set('after', after);
         
         const result = await makeRequest('GET', `/v1/memories?${params}`);
         const memories = result.memories || result.data || [];
@@ -1044,7 +1084,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         let healthy = true;
 
         // 1. Private key
-        checks.push(`✅ MEMOCLAW_PRIVATE_KEY is set`);
+        checks.push(`✅ Private key loaded (source: ${CONFIG_SOURCE})`);
         checks.push(`📍 API URL: ${API_URL}`);
         checks.push(`👛 Wallet: ${account.address}`);
 
@@ -1062,9 +1102,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           healthy = false;
           checks.push(`❌ API unreachable: ${err.message}`);
           checks.push(`\n💡 Setup instructions:`);
-          checks.push(`   1. Set MEMOCLAW_PRIVATE_KEY to an EVM private key (0x...)`);
-          checks.push(`   2. Optionally set MEMOCLAW_URL (default: https://api.memoclaw.com)`);
-          checks.push(`   3. Restart the MCP server`);
+          checks.push(`   1. Run \`memoclaw init\` (easiest — creates ~/.memoclaw/config.json)`);
+          checks.push(`   2. Or set MEMOCLAW_PRIVATE_KEY env var to an EVM private key (0x...)`);
+          checks.push(`   3. Optionally set MEMOCLAW_URL (default: https://api.memoclaw.com)`);
+          checks.push(`   4. Restart the MCP server`);
         }
 
         const status = healthy ? '🟢 MemoClaw is ready!' : '🔴 MemoClaw needs configuration';

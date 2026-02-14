@@ -170,6 +170,18 @@ describe('Tool Definitions', () => {
     expect(tool.inputSchema.required).toContain('memory_id');
   });
 
+  it('search has after filter', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_search');
+    expect(tool.inputSchema.properties.after).toBeDefined();
+  });
+
+  it('list has after filter', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_list');
+    expect(tool.inputSchema.properties.after).toBeDefined();
+  });
+
   it('list has memory_type filter', async () => {
     const result = await listToolsHandler();
     const tool = result.tools.find((t: any) => t.name === 'memoclaw_list');
@@ -395,6 +407,15 @@ describe('Tool Handlers', () => {
     expect(url).toContain('memory_type=decision');
   });
 
+  it('search passes after filter', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    await callToolHandler({
+      params: { name: 'memoclaw_search', arguments: { query: 'test', after: '2025-06-01T00:00:00Z' } },
+    });
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('after=2025-06-01');
+  });
+
   // --- Get ---
 
   it('get fetches single memory', async () => {
@@ -426,6 +447,15 @@ describe('Tool Handlers', () => {
     expect(url).toContain('offset=5');
     expect(url).toContain('namespace=work');
     expect(url).toContain('tags=a%2Cb');
+  });
+
+  it('list passes after filter', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [], total: 0 });
+    await callToolHandler({
+      params: { name: 'memoclaw_list', arguments: { after: '2025-06-01T00:00:00Z' } },
+    });
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('after=2025-06-01');
   });
 
   it('list passes memory_type filter', async () => {
@@ -1016,6 +1046,7 @@ describe('Tool Handlers', () => {
     });
     expect(result.content[0].text).toContain('MemoClaw is ready');
     expect(result.content[0].text).toContain('500/1000');
+    expect(result.content[0].text).toContain('Private key loaded');
   });
 
   it('init returns error status when API is unreachable', async () => {
