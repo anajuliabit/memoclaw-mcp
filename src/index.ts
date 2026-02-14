@@ -11,6 +11,7 @@ import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { toClientEvmSigner } from '@x402/evm';
 import { privateKeyToAccount } from 'viem/accounts';
 
+import { readFileSync } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import { homedir } from 'node:os';
@@ -28,9 +29,7 @@ function loadConfig(): { privateKey: string; apiUrl: string; configSource: strin
   if (!privateKey || !apiUrl) {
     try {
       const configPath = join(homedir(), '.memoclaw', 'config.json');
-      // Use synchronous read during startup (before async context)
-      const fs = require('node:fs');
-      const raw = fs.readFileSync(configPath, 'utf-8');
+      const raw = readFileSync(configPath, 'utf-8');
       const config = JSON.parse(raw);
       if (!privateKey && config.privateKey) {
         privateKey = config.privateKey;
@@ -146,6 +145,27 @@ function formatMemory(m: any): string {
   if (m.created_at) parts.push(`  created: ${m.created_at}`);
   if (m.updated_at && m.updated_at !== m.created_at) parts.push(`  updated: ${m.updated_at}`);
   return parts.join('\n');
+}
+
+/**
+ * Run promises with concurrency limit.
+ */
+async function withConcurrency<T>(tasks: (() => Promise<T>)[], limit: number): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      try {
+        results[i] = { status: 'fulfilled', value: await tasks[i]() };
+      } catch (reason: any) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 /** Allowed fields for the update endpoint */
@@ -730,8 +750,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (ids.length > 100) {
           throw new Error('Maximum 100 IDs per bulk delete call');
         }
-        const results = await Promise.allSettled(
-          ids.map((id: string) => makeRequest('DELETE', `/v1/memories/${id}`))
+        const results = await withConcurrency(
+          ids.map((id: string) => () => makeRequest('DELETE', `/v1/memories/${id}`)),
+          10
         );
         const succeeded = results.filter(r => r.status === 'fulfilled').length;
         const failed = results.filter(r => r.status === 'rejected').length;
@@ -904,8 +925,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             throw new Error(`Memory at index ${i} has empty content`);
           }
         }
-        const results = await Promise.allSettled(
-          memories.map((m: any) => {
+        const results = await withConcurrency(
+          memories.map((m: any) => () => {
             const body: any = { content: m.content };
             if (m.importance !== undefined) body.importance = m.importance;
             if (m.tags) body.tags = m.tags;
@@ -915,7 +936,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (session_id) body.session_id = session_id;
             if (agent_id) body.agent_id = agent_id;
             return makeRequest('POST', '/v1/store', body);
-          })
+          }),
+          10
         );
         const succeeded = results.filter(r => r.status === 'fulfilled').length;
         const failed = results.filter(r => r.status === 'rejected').length;
@@ -941,8 +963,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
         const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at'];
-        const results = await Promise.allSettled(
-          memories.map((m: any) => {
+        const results = await withConcurrency(
+          memories.map((m: any) => () => {
             const body: any = {};
             for (const key of STORE_FIELDS) {
               if (m[key] !== undefined) body[key] = m[key];
@@ -950,7 +972,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (session_id) body.session_id = session_id;
             if (agent_id) body.agent_id = agent_id;
             return makeRequest('POST', '/v1/store', body);
-          })
+          }),
+          10
         );
         const succeeded = results.filter(r => r.status === 'fulfilled');
         const failed = results.filter(r => r.status === 'rejected');
@@ -1002,8 +1025,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const memories = result.memories || result.data || [];
           if (memories.length === 0) break;
           
-          const deleteResults = await Promise.allSettled(
-            memories.map((m: any) => makeRequest('DELETE', `/v1/memories/${m.id}`))
+          const deleteResults = await withConcurrency(
+            memories.map((m: any) => () => makeRequest('DELETE', `/v1/memories/${m.id}`)),
+            10
           );
           
           for (let i = 0; i < deleteResults.length; i++) {
