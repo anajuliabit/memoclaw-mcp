@@ -130,15 +130,17 @@ const TOOLS = [
     },
     {
         name: 'memoclaw_recall',
-        description: 'Search memories by semantic similarity to a natural language query. ' +
-            'Returns the most relevant memories ranked by similarity score (0-1). ' +
-            'Use filters (tags, namespace, memory_type, after) to narrow results. ' +
-            'Set include_relations=true to also fetch related memories. ' +
-            'This is the primary way to retrieve memories — prefer this over memoclaw_list for finding specific information.',
+        description: '🔍 SEMANTIC SEARCH: Find memories by meaning, not exact words. ' +
+            'This tool finds memories that are similar in meaning to your query, even if they don\'t contain the exact same words. ' +
+            'Example queries: "what does the user prefer for X?" finds memories about user preferences; "decisions about database" finds memories about DB decisions. ' +
+            'Returns results ranked by similarity score (0-1). Use min_similarity=0.3+ to filter low-quality matches. ' +
+            'Use filters (tags, namespace, memory_type, session_id, agent_id, after) to narrow results. ' +
+            'Set include_relations=true to also fetch related memories via the knowledge graph. ' +
+            '💡 TIP: If you know the memory ID, use memoclaw_get (faster). For exact keyword matching, use memoclaw_search.',
         inputSchema: {
             type: 'object',
             properties: {
-                query: { type: 'string', description: 'Natural language search query. Describe what you\'re looking for, e.g. "user\'s favorite programming language" or "decisions about database architecture".' },
+                query: { type: 'string', description: 'Natural language search query. Describe what you\'re looking for in plain English, e.g. "user\'s favorite programming language" or "what was decided about the database".' },
                 limit: { type: 'number', description: 'Maximum number of results to return. Default: 5. Max: 50.' },
                 min_similarity: { type: 'number', description: 'Minimum similarity threshold (0.0-1.0). Only return memories above this score. Default: 0. Recommended: 0.3+ for relevant results.' },
                 tags: { type: 'array', items: { type: 'string' }, description: 'Only return memories that have ALL of these tags.' },
@@ -148,6 +150,27 @@ const TOOLS = [
                 agent_id: { type: 'string', description: 'Only return memories from this agent.' },
                 include_relations: { type: 'boolean', description: 'If true, include related memories (via relations) in the response. Useful for exploring memory graphs.' },
                 after: { type: 'string', description: 'Only return memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".' },
+            },
+            required: ['query'],
+        },
+    },
+    {
+        name: 'memoclaw_search',
+        description: '🔎 KEYWORD SEARCH: Find memories containing exact keywords or phrases. ' +
+            'Unlike memoclaw_recall (semantic search), this does exact string matching — finds memories that contain the exact words you specify. ' +
+            'Example: query="python" finds memories with "python" in them; query="error failed" finds memories with both words. ' +
+            'Use this for debugging, finding specific technical terms, or when you need exact matches. ' +
+            'For finding similar meanings (semantic search), use memoclaw_recall instead.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'Keyword or phrase to search for. Matches memories containing this text (case-insensitive).' },
+                limit: { type: 'number', description: 'Maximum number of results. Default: 20. Max: 100.' },
+                namespace: { type: 'string', description: 'Only search within this namespace.' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Only return memories with ALL of these tags.' },
+                memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Only return memories of this type.' },
+                session_id: { type: 'string', description: 'Only return memories from this session.' },
+                agent_id: { type: 'string', description: 'Only return memories from this agent.' },
             },
             required: ['query'],
         },
@@ -166,9 +189,11 @@ const TOOLS = [
     },
     {
         name: 'memoclaw_list',
-        description: 'List memories with pagination. Returns memories in reverse chronological order. ' +
-            'Use this for browsing or when you need to paginate through all memories. ' +
-            'For finding specific memories, prefer memoclaw_recall (semantic search) instead.',
+        description: '📋 LIST: Browse all memories chronologically (newest first). ' +
+            'Use this for pagination through all memories or browsing recent entries. ' +
+            'Supports filtering by tags, namespace, memory_type, session_id, agent_id. ' +
+            '💡 TIP: For finding specific information by meaning, use memoclaw_recall (semantic search). ' +
+            '💡 TIP: For finding specific keywords, use memoclaw_search (keyword search).',
         inputSchema: {
             type: 'object',
             properties: {
@@ -514,6 +539,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 }
                 const formatted = memories.map((m) => formatMemory(m)).join('\n\n');
                 return { content: [{ type: 'text', text: `Found ${memories.length} memories:\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+            }
+            case 'memoclaw_search': {
+                const { query, limit, namespace, tags, memory_type, session_id, agent_id } = args;
+                if (!query || (typeof query === 'string' && query.trim() === '')) {
+                    throw new Error('query is required and cannot be empty');
+                }
+                // Build query params for keyword search
+                const params = new URLSearchParams();
+                params.set('q', query); // keyword query
+                if (limit !== undefined)
+                    params.set('limit', String(limit));
+                if (namespace)
+                    params.set('namespace', namespace);
+                if (tags && Array.isArray(tags) && tags.length > 0)
+                    params.set('tags', tags.join(','));
+                if (memory_type)
+                    params.set('memory_type', memory_type);
+                if (session_id)
+                    params.set('session_id', session_id);
+                if (agent_id)
+                    params.set('agent_id', agent_id);
+                const result = await makeRequest('GET', `/v1/memories/search?${params}`);
+                const memories = result.memories || result.data || [];
+                if (memories.length === 0) {
+                    return { content: [{ type: 'text', text: `No memories found containing: "${query}"` }] };
+                }
+                const formatted = memories.map((m) => formatMemory(m)).join('\n\n');
+                return { content: [{ type: 'text', text: `Found ${memories.length} memories containing "${query}":\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
             }
             case 'memoclaw_get': {
                 const { id } = args;

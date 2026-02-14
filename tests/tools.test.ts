@@ -86,7 +86,7 @@ describe('Tool Definitions', () => {
     const result = await listToolsHandler();
     const names = result.tools.map((t: any) => t.name);
     expect(names).toEqual(expect.arrayContaining([
-      'memoclaw_store', 'memoclaw_recall', 'memoclaw_get', 'memoclaw_list',
+      'memoclaw_store', 'memoclaw_recall', 'memoclaw_search', 'memoclaw_get', 'memoclaw_list',
       'memoclaw_delete', 'memoclaw_bulk_delete', 'memoclaw_update',
       'memoclaw_status', 'memoclaw_ingest', 'memoclaw_extract',
       'memoclaw_consolidate', 'memoclaw_suggested',
@@ -96,9 +96,9 @@ describe('Tool Definitions', () => {
     ]));
   });
 
-  it('has 21 tools total', async () => {
+  it('has 22 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(21);
+    expect(result.tools).toHaveLength(22);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -117,6 +117,12 @@ describe('Tool Definitions', () => {
   it('recall requires query', async () => {
     const result = await listToolsHandler();
     const tool = result.tools.find((t: any) => t.name === 'memoclaw_recall');
+    expect(tool.inputSchema.required).toContain('query');
+  });
+
+  it('search requires query', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_search');
     expect(tool.inputSchema.required).toContain('query');
   });
 
@@ -333,6 +339,60 @@ describe('Tool Handlers', () => {
     expect(body.filters.memory_type).toBe('decision');
     expect(body.filters.after).toBe('2025-01-01T00:00:00Z');
     expect(body.namespace).toBe('work');
+  });
+
+  // --- Search (keyword) ---
+
+  it('search requires query', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_search', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('query is required');
+  });
+
+  it('search with empty query returns error', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_search', arguments: { query: '' } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('query is required');
+  });
+
+  it('search returns formatted results', async () => {
+    globalThis.fetch = mockFetchOk({
+      memories: [
+        { id: '1', content: 'Python is great', tags: ['tech'] },
+        { id: '2', content: 'Python tutorial', tags: ['learning'] },
+      ],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_search', arguments: { query: 'python' } },
+    });
+    expect(result.content[0].text).toContain('Found 2 memories containing "python"');
+    expect(result.content[0].text).toContain('Python is great');
+    expect(result.content[0].text).toContain('Python tutorial');
+  });
+
+  it('search with no results', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_search', arguments: { query: 'nonexistent' } },
+    });
+    expect(result.content[0].text).toContain('No memories found containing');
+  });
+
+  it('search builds correct query params', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    await callToolHandler({
+      params: { name: 'memoclaw_search', arguments: { query: 'test', limit: 10, namespace: 'work', tags: ['a', 'b'], memory_type: 'decision' } },
+    });
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('q=test');
+    expect(url).toContain('limit=10');
+    expect(url).toContain('namespace=work');
+    expect(url).toContain('tags=a%2Cb');
+    expect(url).toContain('memory_type=decision');
   });
 
   // --- Get ---
