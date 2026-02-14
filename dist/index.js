@@ -7,6 +7,7 @@ import { x402HTTPClient } from '@x402/core/http';
 import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { toClientEvmSigner } from '@x402/evm';
 import { privateKeyToAccount } from 'viem/accounts';
+import { readFileSync } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import { homedir } from 'node:os';
@@ -22,9 +23,7 @@ function loadConfig() {
     if (!privateKey || !apiUrl) {
         try {
             const configPath = join(homedir(), '.memoclaw', 'config.json');
-            // Use synchronous read during startup (before async context)
-            const fs = require('node:fs');
-            const raw = fs.readFileSync(configPath, 'utf-8');
+            const raw = readFileSync(configPath, 'utf-8');
             const config = JSON.parse(raw);
             if (!privateKey && config.privateKey) {
                 privateKey = config.privateKey;
@@ -90,7 +89,7 @@ async function makeRequest(method, path, body) {
         const paymentHeaders = client.encodePaymentSignatureHeader(paymentPayload);
         res = await fetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json', ...paymentHeaders },
+            headers: { ...headers, ...paymentHeaders },
             body: body ? JSON.stringify(body) : undefined,
         });
     }
@@ -131,6 +130,27 @@ function formatMemory(m) {
     if (m.updated_at && m.updated_at !== m.created_at)
         parts.push(`  updated: ${m.updated_at}`);
     return parts.join('\n');
+}
+/**
+ * Run promises with concurrency limit.
+ */
+async function withConcurrency(tasks, limit) {
+    const results = new Array(tasks.length);
+    let idx = 0;
+    async function worker() {
+        while (idx < tasks.length) {
+            const i = idx++;
+            try {
+                results[i] = { status: 'fulfilled', value: await tasks[i]() };
+            }
+            catch (reason) {
+                results[i] = { status: 'rejected', reason };
+            }
+        }
+    }
+    const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+    await Promise.all(workers);
+    return results;
 }
 /** Allowed fields for the update endpoint */
 const UPDATE_FIELDS = new Set([
@@ -700,7 +720,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (ids.length > 100) {
                     throw new Error('Maximum 100 IDs per bulk delete call');
                 }
-                const results = await Promise.allSettled(ids.map((id) => makeRequest('DELETE', `/v1/memories/${id}`)));
+                const results = await withConcurrency(ids.map((id) => () => makeRequest('DELETE', `/v1/memories/${id}`)), 10);
                 const succeeded = results.filter(r => r.status === 'fulfilled').length;
                 const failed = results.filter(r => r.status === 'rejected').length;
                 const errors = results
@@ -875,7 +895,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         throw new Error(`Memory at index ${i} has empty content`);
                     }
                 }
-                const results = await Promise.allSettled(memories.map((m) => {
+                const results = await withConcurrency(memories.map((m) => () => {
                     const body = { content: m.content };
                     if (m.importance !== undefined)
                         body.importance = m.importance;
@@ -892,7 +912,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     if (agent_id)
                         body.agent_id = agent_id;
                     return makeRequest('POST', '/v1/store', body);
-                }));
+                }), 10);
                 const succeeded = results.filter(r => r.status === 'fulfilled').length;
                 const failed = results.filter(r => r.status === 'rejected').length;
                 const errors = results
@@ -917,7 +937,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     }
                 }
                 const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at'];
-                const results = await Promise.allSettled(memories.map((m) => {
+                const results = await withConcurrency(memories.map((m) => () => {
                     const body = {};
                     for (const key of STORE_FIELDS) {
                         if (m[key] !== undefined)
@@ -928,7 +948,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     if (agent_id)
                         body.agent_id = agent_id;
                     return makeRequest('POST', '/v1/store', body);
-                }));
+                }), 10);
                 const succeeded = results.filter(r => r.status === 'fulfilled');
                 const failed = results.filter(r => r.status === 'rejected');
                 const stored = succeeded.map(r => r.value?.memory || r.value);
@@ -946,8 +966,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case 'memoclaw_count': {
                 const { namespace, tags, agent_id, memory_type } = args;
                 const params = new URLSearchParams();
-                params.set('limit', '1');
-                params.set('offset', '0');
                 if (namespace)
                     params.set('namespace', namespace);
                 if (tags && Array.isArray(tags) && tags.length > 0)
@@ -956,8 +974,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     params.set('agent_id', agent_id);
                 if (memory_type)
                     params.set('memory_type', memory_type);
-                const result = await makeRequest('GET', `/v1/memories?${params}`);
-                const total = result.total ?? (result.memories || result.data || []).length;
+                let total;
+                try {
+                    // Try dedicated count endpoint first
+                    const countResult = await makeRequest('GET', `/v1/memories/count?${params}`);
+                    total = countResult.count ?? countResult.total ?? 'unknown';
+                }
+                catch {
+                    // Fall back to list with limit=1 and read total from response
+                    params.set('limit', '1');
+                    params.set('offset', '0');
+                    const result = await makeRequest('GET', `/v1/memories?${params}`);
+                    total = result.total ?? (result.memories || result.data || []).length;
+                }
                 const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, tags?.length && `tags=${tags.join(',')}`].filter(Boolean);
                 const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
                 return { content: [{ type: 'text', text: `📊 Total memories${filterStr}: ${total}` }] };
@@ -969,12 +998,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 // Paginate through all memories in namespace and delete them
                 const deletedIds = [];
                 const errors = [];
-                let offset = 0;
+                let pages = 0;
                 const pageSize = 100;
-                while (true) {
+                const maxPages = 200; // Safety valve: 200 pages × 100 = 20k max
+                while (pages < maxPages) {
+                    pages++;
                     const params = new URLSearchParams();
                     params.set('limit', String(pageSize));
-                    params.set('offset', String(offset));
+                    // Always fetch offset 0: successful deletes shrink the list.
+                    // If ALL deletes on a page fail, we advance offset to skip them.
+                    params.set('offset', String(errors.length));
                     params.set('namespace', namespace);
                     if (agent_id)
                         params.set('agent_id', agent_id);
@@ -982,10 +1015,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     const memories = result.memories || result.data || [];
                     if (memories.length === 0)
                         break;
-                    const deleteResults = await Promise.allSettled(memories.map((m) => makeRequest('DELETE', `/v1/memories/${m.id}`)));
+                    const deleteResults = await withConcurrency(memories.map((m) => () => makeRequest('DELETE', `/v1/memories/${m.id}`)), 10);
+                    let pageSuccesses = 0;
                     for (let i = 0; i < deleteResults.length; i++) {
                         if (deleteResults[i].status === 'fulfilled') {
                             deletedIds.push(memories[i].id);
+                            pageSuccesses++;
                         }
                         else {
                             errors.push(`${memories[i].id}: ${deleteResults[i].reason?.message || 'unknown'}`);
@@ -994,8 +1029,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     // If we got fewer than pageSize, we're done
                     if (memories.length < pageSize)
                         break;
-                    // Don't increment offset since we're deleting, but add safety valve
-                    if (deletedIds.length + errors.length > 10000)
+                    // If nothing was deleted on this page, all remaining are errors — stop
+                    if (pageSuccesses === 0)
                         break;
                 }
                 let text = `🗑️ Namespace "${namespace}": ${deletedIds.length} memories deleted`;

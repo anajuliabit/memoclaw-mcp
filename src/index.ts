@@ -111,7 +111,7 @@ async function makeRequest(method: string, path: string, body?: any) {
     
     res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', ...paymentHeaders },
+      headers: { ...headers, ...paymentHeaders },
       body: body ? JSON.stringify(body) : undefined,
     });
   }
@@ -991,14 +991,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'memoclaw_count': {
         const { namespace, tags, agent_id, memory_type } = args as any;
         const params = new URLSearchParams();
-        params.set('limit', '1');
-        params.set('offset', '0');
         if (namespace) params.set('namespace', namespace);
         if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));
         if (agent_id) params.set('agent_id', agent_id);
         if (memory_type) params.set('memory_type', memory_type);
-        const result = await makeRequest('GET', `/v1/memories?${params}`);
-        const total = result.total ?? (result.memories || result.data || []).length;
+        
+        let total: number | string;
+        try {
+          // Try dedicated count endpoint first
+          const countResult = await makeRequest('GET', `/v1/memories/count?${params}`);
+          total = countResult.count ?? countResult.total ?? 'unknown';
+        } catch {
+          // Fall back to list with limit=1 and read total from response
+          params.set('limit', '1');
+          params.set('offset', '0');
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          total = result.total ?? (result.memories || result.data || []).length;
+        }
+        
         const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, tags?.length && `tags=${tags.join(',')}`].filter(Boolean);
         const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
         return { content: [{ type: 'text', text: `📊 Total memories${filterStr}: ${total}` }] };
@@ -1011,13 +1021,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Paginate through all memories in namespace and delete them
         const deletedIds: string[] = [];
         const errors: string[] = [];
-        let offset = 0;
+        let pages = 0;
         const pageSize = 100;
+        const maxPages = 200; // Safety valve: 200 pages × 100 = 20k max
         
-        while (true) {
+        while (pages < maxPages) {
+          pages++;
           const params = new URLSearchParams();
           params.set('limit', String(pageSize));
-          params.set('offset', String(offset));
+          // Always fetch offset 0: successful deletes shrink the list.
+          // If ALL deletes on a page fail, we advance offset to skip them.
+          params.set('offset', String(errors.length));
           params.set('namespace', namespace);
           if (agent_id) params.set('agent_id', agent_id);
           
@@ -1030,9 +1044,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             10
           );
           
+          let pageSuccesses = 0;
           for (let i = 0; i < deleteResults.length; i++) {
             if (deleteResults[i].status === 'fulfilled') {
               deletedIds.push(memories[i].id);
+              pageSuccesses++;
             } else {
               errors.push(`${memories[i].id}: ${(deleteResults[i] as PromiseRejectedResult).reason?.message || 'unknown'}`);
             }
@@ -1040,8 +1056,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           
           // If we got fewer than pageSize, we're done
           if (memories.length < pageSize) break;
-          // Don't increment offset since we're deleting, but add safety valve
-          if (deletedIds.length + errors.length > 10000) break;
+          // If nothing was deleted on this page, all remaining are errors — stop
+          if (pageSuccesses === 0) break;
         }
         
         let text = `🗑️ Namespace "${namespace}": ${deletedIds.length} memories deleted`;
