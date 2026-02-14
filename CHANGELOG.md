@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+
+### Features
+- **Config file auto-loading**: MCP server now auto-detects `~/.memoclaw/config.json` (created by `memoclaw init`). Resolution order: env var → config file → default. No more mandatory env vars after `memoclaw init`.
+- **`after` filter for `list` and `search`**: Both tools now support an `after` parameter to filter memories by creation date, matching `recall`'s existing capability.
+- **Better `memoclaw_init` output**: Shows config resolution source (env vs config file) and updated setup instructions mentioning `memoclaw init`.
+
+### Tests
+- Added 4 new tests: `search after filter`, `list after filter`, `list has after filter`, `search has after filter`, init config source display. Total: 98 tests.
+
 All notable changes to memoclaw-mcp will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
