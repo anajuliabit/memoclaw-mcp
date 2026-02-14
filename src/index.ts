@@ -920,6 +920,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             pinned: m.pinned,
             expires_at: m.expires_at,
             metadata: m.metadata,
+            skip_duplicates,
           }))
         );
         const succeeded = results.filter(r => r.status === 'fulfilled');

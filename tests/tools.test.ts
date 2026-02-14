@@ -753,6 +753,105 @@ describe('Tool Handlers', () => {
     });
     expect(result.content[0].text).toContain('No related memories found');
   });
+
+  // Additional edge case tests
+
+  it('import validates memories array', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('non-empty array');
+  });
+
+  it('import validates max 200 items', async () => {
+    const memories = Array.from({ length: 201 }, (_, i) => ({ content: `memory ${i}` }));
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: { memories } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Maximum 200');
+  });
+
+  it('import validates each memory has content', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: { memories: [{ content: '' }, { content: 'valid' }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('content is required');
+  });
+
+  it('import passes skip_duplicates to API', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+    await callToolHandler({
+      params: { 
+        name: 'memoclaw_import', 
+        arguments: { 
+          memories: [{ content: 'test memory' }],
+          skip_duplicates: true 
+        } 
+      },
+    });
+    const call = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.skip_duplicates).toBe(true);
+  });
+
+  it('import uses provided namespace for all memories when no override', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+    await callToolHandler({
+      params: { 
+        name: 'memoclaw_import', 
+        arguments: { 
+          memories: [{ content: 'test1' }, { content: 'test2' }],
+          namespace: 'imported'
+        } 
+      },
+    });
+    const calls = (globalThis.fetch as any).mock.calls;
+    const body1 = JSON.parse(calls[0][1].body);
+    const body2 = JSON.parse(calls[1][1].body);
+    // Both should use the import-level namespace
+    expect(body1.namespace).toBe('imported');
+    expect(body2.namespace).toBe('imported');
+  });
+
+  it('consolidate passes dry_run parameter', async () => {
+    globalThis.fetch = mockFetchOk({ merged: [] });
+    await callToolHandler({
+      params: { name: 'memoclaw_consolidate', arguments: { dry_run: true, min_similarity: 0.9 } },
+    });
+    const call = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.dry_run).toBe(true);
+    expect(body.min_similarity).toBe(0.9);
+  });
+
+  it('create_relation validates all required fields', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_create_relation', arguments: { memory_id: 'a', target_id: 'b' } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('relation_type');
+  });
+
+  it('update requires id field', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_update', arguments: { content: 'new content' } },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  it('list validates tags is array', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    await callToolHandler({
+      params: { name: 'memoclaw_list', arguments: { tags: 'not-an-array' } },
+    });
+    // Should handle gracefully - tags should be array but we don't error
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    // If tags is not array, it won't be added to params
+    expect(url).not.toContain('tags=');
+  });
 });
 
 // Import afterEach for cleanup

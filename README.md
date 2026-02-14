@@ -44,18 +44,34 @@ Add to MCP settings in Cursor preferences.
 
 | Tool | Description |
 |------|-------------|
+| **Memory Operations** | |
 | `memoclaw_store` | Store a memory with semantic embeddings |
-| `memoclaw_recall` | Recall memories via semantic search |
-| `memoclaw_list` | List stored memories |
+| `memoclaw_bulk_store` | Store multiple memories in one call (max 50) |
+| `memoclaw_recall` | Semantic search - find memories by meaning |
+| `memoclaw_get` | Retrieve a single memory by ID |
+| `memoclaw_list` | List memories chronologically with filtering |
+| `memoclaw_update` | Update an existing memory |
 | `memoclaw_delete` | Delete a memory by ID |
-| `memoclaw_status` | Check free tier remaining calls |
-| `memoclaw_ingest` | Zero-effort ingestion: dump conversations/text, auto-extract facts with dedup & relations |
-| `memoclaw_extract` | Extract structured facts from conversation via LLM |
-| `memoclaw_consolidate` | Merge similar memories by clustering |
+| `memoclaw_bulk_delete` | Delete multiple memories at once (max 100) |
+| **Advanced Features** | |
+| `memoclaw_ingest` | Bulk ingest conversations/text with auto-extraction |
+| `memoclaw_extract` | Extract structured facts from conversations |
+| `memoclaw_consolidate` | Merge similar/duplicate memories |
 | `memoclaw_suggested` | Get proactive memory suggestions |
-| `memoclaw_update` | Update a memory by ID |
-| `memoclaw_create_relation` | Create a relationship between memories |
-| `memoclaw_list_relations` | List all relationships for a memory |
+| **Relations & Graph** | |
+| `memoclaw_create_relation` | Create relationships between memories |
+| `memoclaw_list_relations` | List all relations for a memory |
+| `memoclaw_delete_relation` | Delete a relation |
+| `memoclaw_graph` | Traverse memory graph via relations |
+| **Organization** | |
+| `memoclaw_namespaces` | List all namespaces |
+| `memoclaw_tags` | List all tags with counts |
+| **Data Management** | |
+| `memoclaw_export` | Export memories to JSON/JSONL |
+| `memoclaw_import` | Import memories from JSON |
+| `memoclaw_stats` | Get memory statistics |
+| **Account** | |
+| `memoclaw_status` | Check free tier remaining calls |
 
 ## Example Usage
 
@@ -64,6 +80,7 @@ Once configured, Claude can use commands like:
 - "Remember that the meeting is at 3pm tomorrow"
 - "What did I say about the project deadline?"
 - "List my recent memories"
+- "What memories do I have about Python?"
 
 ## Pricing
 
