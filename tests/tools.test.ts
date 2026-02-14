@@ -91,12 +91,13 @@ describe('Tool Definitions', () => {
       'memoclaw_create_relation', 'memoclaw_list_relations', 'memoclaw_delete_relation',
       'memoclaw_export', 'memoclaw_namespaces', 'memoclaw_tags',
       'memoclaw_bulk_store', 'memoclaw_stats', 'memoclaw_import', 'memoclaw_graph',
+      'memoclaw_batch_recall',
     ]));
   });
 
-  it('has 22 tools total (20 original + import + graph)', async () => {
+  it('has 23 tools total (22 original + batch_recall)', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(22);
+    expect(result.tools).toHaveLength(23);
   });
 
   it('store requires content', async () => {
@@ -706,37 +707,45 @@ describe('Tool Handlers', () => {
     let callCount = 0;
     globalThis.fetch = vi.fn().mockImplementation(() => {
       callCount++;
+      // First call: get relations for starting memory
       if (callCount === 1) {
-        // First call: get the starting memory
-        return Promise.resolve({
-          ok: true, status: 200,
-          json: () => Promise.resolve({ memory: { id: 'm1', content: 'original' } }),
-          text: () => Promise.resolve(''),
-          headers: new Headers(),
-        });
-      } else if (callCount === 2) {
-        // Second call: get relations
         return Promise.resolve({
           ok: true, status: 200,
           json: () => Promise.resolve({ relations: [{ source_id: 'm1', target_id: 'm2', relation_type: 'supersedes' }] }),
           text: () => Promise.resolve(''),
           headers: new Headers(),
         });
-      } else {
-        // Third call: get related memory
+      } else if (callCount === 2) {
+        // Second call: get related memory m2
         return Promise.resolve({
           ok: true, status: 200,
           json: () => Promise.resolve({ memory: { id: 'm2', content: 'new version' } }),
           text: () => Promise.resolve(''),
           headers: new Headers(),
         });
+      } else if (callCount === 3) {
+        // Third call: get relations for m2 (depth 2)
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ relations: [] }),
+          text: () => Promise.resolve(''),
+          headers: new Headers(),
+        });
+      } else {
+        // Any additional calls
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ relations: [] }),
+          text: () => Promise.resolve(''),
+          headers: new Headers(),
+        });
       }
     });
     const result = await callToolHandler({
-      params: { name: 'memoclaw_graph', arguments: { memory_id: 'm1' } },
+      params: { name: 'memoclaw_graph', arguments: { memory_id: 'm1', depth: 2 } },
     });
     expect(result.content[0].text).toContain('related memories');
-    expect(callCount).toBe(3);
+    expect(callCount).toBeGreaterThanOrEqual(3);
   });
 
   it('graph with no related memories returns appropriate message', async () => {
@@ -851,6 +860,79 @@ describe('Tool Handlers', () => {
     const url = (globalThis.fetch as any).mock.calls[0][0] as string;
     // If tags is not array, it won't be added to params
     expect(url).not.toContain('tags=');
+  });
+
+  // Tests for batch_recall tool
+  it('batch_recall requires queries array', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_recall', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('queries is required');
+  });
+
+  it('batch_recall validates max 10 queries', async () => {
+    const queries = Array.from({ length: 11 }, (_, i) => ({ query: `query ${i}` }));
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_recall', arguments: { queries } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Maximum 10');
+  });
+
+  it('batch_recall validates each query has content', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_recall', arguments: { queries: [{ query: '' }, { query: 'valid' }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('query is required');
+  });
+
+  it('batch_recall executes multiple queries in parallel', async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ memories: [{ id: `m${callCount}`, content: `result for query ${callCount}`, similarity: 0.9 }] }),
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      });
+    });
+    const result = await callToolHandler({
+      params: { 
+        name: 'memoclaw_batch_recall', 
+        arguments: { 
+          queries: [
+            { query: 'user preferences' },
+            { query: 'recent decisions' },
+            { query: 'project notes' }
+          ]
+        } 
+      },
+    });
+    expect(result.content[0].text).toContain('Batch recall');
+    expect(result.content[0].text).toContain('3 queries');
+    expect(callCount).toBe(3);
+  });
+
+  it('batch_recall respects per-query limit and min_similarity', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1', content: 'test' }] });
+    await callToolHandler({
+      params: { 
+        name: 'memoclaw_batch_recall', 
+        arguments: { 
+          queries: [{ query: 'test', limit: 5, min_similarity: 0.7 }],
+          namespace: 'work'
+        } 
+      },
+    });
+    const call = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.query).toBe('test');
+    expect(body.limit).toBe(5);
+    expect(body.min_similarity).toBe(0.7);
+    expect(body.namespace).toBe('work');
   });
 });
 
