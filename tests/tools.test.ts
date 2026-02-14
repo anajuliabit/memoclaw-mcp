@@ -96,9 +96,9 @@ describe('Tool Definitions', () => {
     ]));
   });
 
-  it('has 22 tools total', async () => {
+  it('has 24 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(22);
+    expect(result.tools).toHaveLength(24);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -1005,6 +1005,62 @@ describe('Tool Handlers', () => {
     const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
     expect(body.content).toBe('ok');
     expect(body.extra_bad_field).toBeUndefined();
+  });
+
+  // --- Init tool ---
+
+  it('init returns healthy status when API is reachable', async () => {
+    globalThis.fetch = mockFetchOk({ free_tier_remaining: 500, free_tier_total: 1000 });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_init', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('MemoClaw is ready');
+    expect(result.content[0].text).toContain('500/1000');
+  });
+
+  it('init returns error status when API is unreachable', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('connect refused'));
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_init', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('needs configuration');
+  });
+
+  // --- Migrate tool ---
+
+  it('migrate with files array calls /v1/migrate', async () => {
+    globalThis.fetch = mockFetchOk({ memories_created: 5, duplicates_skipped: 1 });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_migrate', arguments: {
+        files: [
+          { filename: 'day1.md', content: '# Day 1\nSome notes' },
+          { filename: 'day2.md', content: '# Day 2\nMore notes' },
+        ],
+        namespace: 'archive',
+      }},
+    });
+    expect(result.content[0].text).toContain('Migration complete');
+    expect(result.content[0].text).toContain('Memories created: 5');
+    expect(result.content[0].text).toContain('Duplicates skipped: 1');
+  });
+
+  it('migrate requires path or files', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_migrate', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Either "path"');
+  });
+
+  it('migrate dry_run with files returns preview', async () => {
+    globalThis.fetch = mockFetchOk({ memories_created: 0, duplicates_skipped: 0, dry_run: true });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_migrate', arguments: {
+        files: [{ filename: 'notes.md', content: 'test content' }],
+        dry_run: true,
+      }},
+    });
+    expect(result.content[0].text).toContain('dry run');
   });
 
   it('graph handles fetch errors gracefully', async () => {

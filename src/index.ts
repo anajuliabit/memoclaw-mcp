@@ -11,6 +11,9 @@ import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { toClientEvmSigner } from '@x402/evm';
 import { privateKeyToAccount } from 'viem/accounts';
 
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { join, extname, basename } from 'node:path';
+
 const API_URL = process.env.MEMOCLAW_URL || 'https://api.memoclaw.com';
 const PRIVATE_KEY = process.env.MEMOCLAW_PRIVATE_KEY;
 
@@ -116,7 +119,7 @@ const UPDATE_FIELDS = new Set([
 ]);
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.5.0' },
+  { name: 'memoclaw', version: '1.6.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -498,6 +501,52 @@ const TOOLS = [
         agent_id: { type: 'string', description: 'Only delete memories from this agent within the namespace.' },
       },
       required: ['namespace'],
+    },
+  },
+  {
+    name: 'memoclaw_init',
+    description:
+      'Check if MemoClaw is properly configured and ready to use. ' +
+      'Returns configuration status: whether MEMOCLAW_PRIVATE_KEY is set, the API URL, ' +
+      'wallet address, and free tier remaining calls. ' +
+      'Call this FIRST before using any other MemoClaw tools to verify the connection works. ' +
+      'If something is misconfigured, the response includes setup instructions.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+  },
+  {
+    name: 'memoclaw_migrate',
+    description:
+      'Migrate local markdown memory files into MemoClaw in bulk. ' +
+      'Accepts EITHER a directory/file path OR an array of file objects with content. ' +
+      'Each markdown file is parsed and sent to the MemoClaw /v1/migrate endpoint for server-side ' +
+      'extraction, deduplication, and storage. ' +
+      'Use this to onboard existing agent memory files (e.g. daily notes, MEMORY.md) into MemoClaw. ' +
+      'Supports .md and .txt files. Recursively scans directories. ' +
+      'Returns a summary of how many memories were created and any errors.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'Absolute or relative path to a markdown file or directory of markdown files. Directories are scanned recursively for .md and .txt files.' },
+        files: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              filename: { type: 'string', description: 'Original filename (for context, e.g. "2025-01-15.md").' },
+              content: { type: 'string', description: 'The full text content of the file.' },
+            },
+            required: ['content'],
+          },
+          description: 'Array of file objects to migrate. Use this when you already have the file contents in memory. Each object needs at least "content".',
+        },
+        namespace: { type: 'string', description: 'Namespace for all migrated memories. Defaults to "migrated".' },
+        agent_id: { type: 'string', description: 'Agent ID to associate with migrated memories.' },
+        deduplicate: { type: 'boolean', description: 'If true (default), the server deduplicates against existing memories before storing.' },
+        dry_run: { type: 'boolean', description: 'If true, returns what WOULD be migrated without actually storing anything.' },
+      },
     },
   },
   {
@@ -988,6 +1037,135 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ).join('\n');
         
         return { content: [{ type: 'text', text: `🕸️ Graph from ${memory_id} (depth ${depth}):\n\n${nodes.length} nodes:\n${nodesFmt}\n\n${edges.length} edges:\n${edgesFmt || '  (none)'}` }] };
+      }
+
+      case 'memoclaw_init': {
+        const checks: string[] = [];
+        let healthy = true;
+
+        // 1. Private key
+        checks.push(`✅ MEMOCLAW_PRIVATE_KEY is set`);
+        checks.push(`📍 API URL: ${API_URL}`);
+        checks.push(`👛 Wallet: ${account.address}`);
+
+        // 2. Test API connectivity + free tier
+        try {
+          const data = await makeRequest('GET', '/v1/free-tier/status');
+          const remaining = data.free_tier_remaining ?? 'unknown';
+          const total = data.free_tier_total ?? 1000;
+          checks.push(`✅ API reachable`);
+          checks.push(`📊 Free tier: ${remaining}/${total} calls remaining`);
+          if (typeof remaining === 'number' && remaining <= 0) {
+            checks.push(`⚠️ Free tier exhausted — x402 payments will be used`);
+          }
+        } catch (err: any) {
+          healthy = false;
+          checks.push(`❌ API unreachable: ${err.message}`);
+          checks.push(`\n💡 Setup instructions:`);
+          checks.push(`   1. Set MEMOCLAW_PRIVATE_KEY to an EVM private key (0x...)`);
+          checks.push(`   2. Optionally set MEMOCLAW_URL (default: https://api.memoclaw.com)`);
+          checks.push(`   3. Restart the MCP server`);
+        }
+
+        const status = healthy ? '🟢 MemoClaw is ready!' : '🔴 MemoClaw needs configuration';
+        return { content: [{ type: 'text', text: `${status}\n\n${checks.join('\n')}` }] };
+      }
+
+      case 'memoclaw_migrate': {
+        const { path: filePath, files, namespace, agent_id, deduplicate, dry_run } = args as any;
+
+        if (!filePath && !files) {
+          throw new Error('Either "path" (file/directory path) or "files" (array of {filename, content}) is required');
+        }
+
+        // Collect file contents
+        let fileList: Array<{ filename: string; content: string }> = [];
+
+        if (files && Array.isArray(files)) {
+          fileList = files.map((f: any, i: number) => ({
+            filename: f.filename || `file-${i}.md`,
+            content: f.content,
+          }));
+        } else if (filePath) {
+          // Read from filesystem
+          const EXTENSIONS = new Set(['.md', '.txt']);
+
+          async function collectFiles(p: string): Promise<Array<{ filename: string; content: string }>> {
+            const s = await stat(p);
+            if (s.isFile() && EXTENSIONS.has(extname(p).toLowerCase())) {
+              const content = await readFile(p, 'utf-8');
+              return [{ filename: basename(p), content }];
+            } else if (s.isDirectory()) {
+              const entries = await readdir(p);
+              const results: Array<{ filename: string; content: string }> = [];
+              for (const entry of entries) {
+                if (entry.startsWith('.')) continue;
+                results.push(...await collectFiles(join(p, entry)));
+              }
+              return results;
+            }
+            return [];
+          }
+
+          fileList = await collectFiles(filePath);
+        }
+
+        if (fileList.length === 0) {
+          return { content: [{ type: 'text', text: '⚠️ No .md or .txt files found at the given path.' }] };
+        }
+
+        // Call the migrate endpoint
+        const body: any = {
+          files: fileList,
+          namespace: namespace || 'migrated',
+          deduplicate: deduplicate !== false,
+        };
+        if (agent_id) body.agent_id = agent_id;
+        if (dry_run) body.dry_run = true;
+
+        try {
+          const result = await makeRequest('POST', '/v1/migrate', body);
+          const prefix = dry_run ? '🔍 Migration preview (dry run)' : '✅ Migration complete';
+          const created = result.memories_created ?? result.count ?? '?';
+          const skipped = result.duplicates_skipped ?? 0;
+          return {
+            content: [{
+              type: 'text',
+              text: `${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}\n\n${JSON.stringify(result, null, 2)}`
+            }]
+          };
+        } catch (err: any) {
+          // If /v1/migrate doesn't exist yet, fall back to ingest per file
+          if (err.message?.includes('404') || err.message?.includes('Not Found')) {
+            if (dry_run) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `🔍 Migration preview (dry run — /v1/migrate not available, would use ingest fallback)\n\n📁 ${fileList.length} files would be ingested:\n${fileList.map(f => `  • ${f.filename} (${f.content.length} chars)`).join('\n')}`
+                }]
+              };
+            }
+            // Fallback: ingest each file via /v1/ingest
+            let totalCreated = 0;
+            const errors: string[] = [];
+            for (const file of fileList) {
+              try {
+                const r = await makeRequest('POST', '/v1/ingest', {
+                  text: file.content,
+                  namespace: namespace || 'migrated',
+                  agent_id,
+                });
+                totalCreated += r.memories_created ?? r.count ?? 0;
+              } catch (e: any) {
+                errors.push(`${file.filename}: ${e.message}`);
+              }
+            }
+            let text = `✅ Migration complete (via ingest fallback)\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${totalCreated}`;
+            if (errors.length > 0) text += `\n\n❌ Errors:\n${errors.join('\n')}`;
+            return { content: [{ type: 'text', text }] };
+          }
+          throw err;
+        }
       }
 
       default:
