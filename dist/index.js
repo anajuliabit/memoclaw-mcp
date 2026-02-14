@@ -404,6 +404,35 @@ const TOOLS = [
         },
     },
     {
+        name: 'memoclaw_batch_recall',
+        description: 'Run multiple semantic searches in a single API call. More efficient than calling memoclaw_recall ' +
+            'multiple times when you need to answer multiple independent questions. ' +
+            'Each query returns its own top matches. Useful for gathering context before a complex task. ' +
+            'Max 10 queries per call. Results are grouped by query.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                queries: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            query: { type: 'string', description: 'Natural language search query.' },
+                            limit: { type: 'number', description: 'Max results for this query. Default: 3.' },
+                            min_similarity: { type: 'number', description: 'Min similarity threshold. Default: 0.0.' },
+                        },
+                        required: ['query'],
+                    },
+                    description: 'Array of search queries to execute. Max 10 items.',
+                },
+                namespace: { type: 'string', description: 'Scope all queries to this namespace.' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Filter all queries by these tags.' },
+                memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'Filter all queries by memory type.' },
+            },
+            required: ['queries'],
+        },
+    },
+    {
         name: 'memoclaw_import',
         description: 'Import memories from a JSON array. This is the inverse of memoclaw_export — ' +
             'use it to restore memories from backup or migrate from another system. ' +
@@ -864,6 +893,77 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 ];
                 return { content: [{ type: 'text', text: lines.join('\n') }] };
             }
+            case 'memoclaw_batch_recall': {
+                const { queries, namespace, tags, memory_type } = args;
+                if (!queries || !Array.isArray(queries) || queries.length === 0) {
+                    throw new Error('queries is required and must be a non-empty array');
+                }
+                if (queries.length > 10) {
+                    throw new Error('Maximum 10 queries per batch call');
+                }
+                // Validate each query
+                for (let i = 0; i < queries.length; i++) {
+                    const q = queries[i];
+                    if (!q.query || (typeof q.query === 'string' && q.query.trim() === '')) {
+                        throw new Error(`queries[${i}].query is required and cannot be empty`);
+                    }
+                }
+                // Run all queries in parallel
+                const results = await Promise.all(queries.map(async (q) => {
+                    try {
+                        const filters = {};
+                        if (tags)
+                            filters.tags = tags;
+                        if (memory_type)
+                            filters.memory_type = memory_type;
+                        const result = await makeRequest('POST', '/v1/recall', {
+                            query: q.query,
+                            limit: q.limit || 3,
+                            min_similarity: q.min_similarity || 0,
+                            filters: Object.keys(filters).length > 0 ? filters : undefined,
+                            namespace,
+                        });
+                        return {
+                            query: q.query,
+                            success: true,
+                            memories: result.memories || [],
+                        };
+                    }
+                    catch (error) {
+                        return {
+                            query: q.query,
+                            success: false,
+                            error: error instanceof Error ? error.message : String(error),
+                        };
+                    }
+                }));
+                // Format output
+                const outputLines = [];
+                let totalResults = 0;
+                for (const result of results) {
+                    outputLines.push(`\n📋 Query: "${result.query}"`);
+                    if (!result.success) {
+                        outputLines.push(`   ❌ Error: ${result.error}`);
+                        continue;
+                    }
+                    const memories = result.memories;
+                    totalResults += memories.length;
+                    if (memories.length === 0) {
+                        outputLines.push(`   No results found`);
+                    }
+                    else {
+                        for (const m of memories) {
+                            outputLines.push(`   • ${m.content.substring(0, 100)}${m.content.length > 100 ? '...' : ''} (${(m.similarity || 0).toFixed(2)})`);
+                        }
+                    }
+                }
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `🔍 Batch recall: ${results.length} queries, ${totalResults} total results\n${outputLines.join('\n')}`
+                        }]
+                };
+            }
             case 'memoclaw_import': {
                 const { memories, namespace, skip_duplicates } = args;
                 if (!memories || !Array.isArray(memories) || memories.length === 0) {
@@ -907,51 +1007,91 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (!memory_id) {
                     throw new Error('memory_id is required');
                 }
-                // First get the starting memory
-                const startMemory = await makeRequest('GET', `/v1/memories/${memory_id}`);
-                // Get all relations from the starting memory
-                const allRelations = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
-                let relations = allRelations.relations || allRelations || [];
-                // Filter by relation types if specified
-                if (relation_types && Array.isArray(relation_types) && relation_types.length > 0) {
-                    relations = relations.filter((r) => relation_types.includes(r.relation_type));
+                const maxDepth = Math.min(depth || 2, 5); // Cap at 5
+                const maxResults = limit || 20;
+                // Helper to fetch relations for a memory
+                async function getRelations(memId) {
+                    try {
+                        const result = await makeRequest('GET', `/v1/memories/${memId}/relations`);
+                        let rels = result.relations || result || [];
+                        // Filter by relation types if specified
+                        if (relation_types && Array.isArray(relation_types) && relation_types.length > 0) {
+                            rels = rels.filter((r) => relation_types.includes(r.relation_type));
+                        }
+                        // Filter by direction
+                        if (direction === 'outgoing') {
+                            rels = rels.filter((r) => r.source_id === memId);
+                        }
+                        else if (direction === 'incoming') {
+                            rels = rels.filter((r) => r.target_id === memId);
+                        }
+                        return rels;
+                    }
+                    catch {
+                        return [];
+                    }
                 }
-                // Filter by direction
-                if (direction === 'outgoing') {
-                    relations = relations.filter((r) => r.source_id === memory_id);
-                }
-                else if (direction === 'incoming') {
-                    relations = relations.filter((r) => r.target_id === memory_id);
-                }
-                // Get related memories (limit depth)
+                // BFS traversal respecting depth
                 const visited = new Set([memory_id]);
                 const relatedMemories = [];
-                // Fetch related memories based on direction
-                const targetIds = direction === 'incoming'
-                    ? relations.map((r) => r.source_id)
-                    : relations.map((r) => r.target_id);
-                for (const id of targetIds) {
-                    if (!visited.has(id)) {
-                        visited.add(id);
-                        try {
-                            const mem = await makeRequest('GET', `/v1/memories/${id}`);
-                            relatedMemories.push(mem.memory || mem);
+                const queue = [{ id: memory_id, depth: 0 }];
+                while (queue.length > 0 && relatedMemories.length < maxResults) {
+                    const current = queue.shift();
+                    if (current.depth >= maxDepth)
+                        continue;
+                    const relations = await getRelations(current.id);
+                    for (const rel of relations) {
+                        // Determine target ID based on direction
+                        let targetId = null;
+                        if (direction === 'outgoing' || !direction) {
+                            if (rel.source_id === current.id)
+                                targetId = rel.target_id;
                         }
-                        catch (e) {
-                            // Memory might have been deleted, skip
+                        if (direction === 'incoming' || !direction) {
+                            if (rel.target_id === current.id)
+                                targetId = rel.source_id;
                         }
-                        if (relatedMemories.length >= (limit || 20))
-                            break;
+                        if (targetId && !visited.has(targetId)) {
+                            visited.add(targetId);
+                            try {
+                                const memResult = await makeRequest('GET', `/v1/memories/${targetId}`);
+                                const mem = memResult.memory || memResult;
+                                relatedMemories.push({ memory: mem, depth: current.depth + 1, relation: rel });
+                                if (relatedMemories.length >= maxResults)
+                                    break;
+                                queue.push({ id: targetId, depth: current.depth + 1 });
+                            }
+                            catch {
+                                // Memory might have been deleted, skip
+                            }
+                        }
                     }
+                    if (relatedMemories.length >= maxResults)
+                        break;
                 }
                 if (relatedMemories.length === 0) {
                     return { content: [{ type: 'text', text: `No related memories found for memory ${memory_id}` }] };
                 }
-                const formatted = relatedMemories.map((m) => formatMemory(m)).join('\n\n');
+                // Format results grouped by depth
+                const byDepth = new Map();
+                for (const item of relatedMemories) {
+                    const d = item.depth;
+                    if (!byDepth.has(d))
+                        byDepth.set(d, []);
+                    byDepth.get(d).push(item.memory);
+                }
+                const formatted = relatedMemories
+                    .sort((a, b) => a.depth - b.depth)
+                    .map((item) => `[depth ${item.depth}] ${formatMemory(item.memory)}`)
+                    .join('\n\n');
+                const depthSummary = Array.from(byDepth.entries())
+                    .sort(([a], [b]) => a - b)
+                    .map(([d, mems]) => `  Depth ${d}: ${mems.length} memories`)
+                    .join('\n');
                 return {
                     content: [{
                             type: 'text',
-                            text: `🔗 Found ${relatedMemories.length} related memories:\n\n${formatted}\n\n---\nStarting memory: ${memory_id}\nRelations found: ${relations.length}\nDirection: ${direction || 'both'}\nDepth: ${depth || 2}`
+                            text: `🔗 Found ${relatedMemories.length} related memories:\n\n${formatted}\n\n---\nStarting memory: ${memory_id}\nDirection: ${direction || 'both'}\nMax depth: ${maxDepth}\n${depthSummary}`
                         }]
                 };
             }
