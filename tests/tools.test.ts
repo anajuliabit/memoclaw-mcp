@@ -92,13 +92,14 @@ describe('Tool Definitions', () => {
       'memoclaw_consolidate', 'memoclaw_suggested',
       'memoclaw_create_relation', 'memoclaw_list_relations', 'memoclaw_delete_relation',
       'memoclaw_export', 'memoclaw_import', 'memoclaw_bulk_store', 'memoclaw_count',
-      'memoclaw_delete_namespace', 'memoclaw_graph', 'memoclaw_namespaces',
+      'memoclaw_delete_namespace', 'memoclaw_graph', 'memoclaw_pin', 'memoclaw_unpin',
+      'memoclaw_namespaces',
     ]));
   });
 
   it('has 25 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(25);
+    expect(result.tools).toHaveLength(27);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -1138,6 +1139,48 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('work: 2 memories');
     expect(result.content[0].text).toContain('personal: 1 memories');
     expect(result.content[0].text).toContain('(default): 1 memories');
+  });
+
+  // ─── memoclaw_pin / memoclaw_unpin ─────────────────────────────────
+
+  it('pin requires id', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_pin', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('id is required');
+  });
+
+  it('pin sets pinned=true via PATCH', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: 'm1', content: 'test', pinned: true } });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_pin', arguments: { id: 'm1' } },
+    });
+    expect(result.content[0].text).toContain('pinned');
+    const [url, opts] = (globalThis.fetch as any).mock.calls[0];
+    expect(url).toContain('/v1/memories/m1');
+    expect(opts.method).toBe('PATCH');
+    expect(JSON.parse(opts.body)).toEqual({ pinned: true });
+  });
+
+  it('unpin requires id', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_unpin', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('id is required');
+  });
+
+  it('unpin sets pinned=false via PATCH', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: 'm1', content: 'test', pinned: false } });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_unpin', arguments: { id: 'm1' } },
+    });
+    expect(result.content[0].text).toContain('unpinned');
+    const [url, opts] = (globalThis.fetch as any).mock.calls[0];
+    expect(url).toContain('/v1/memories/m1');
+    expect(opts.method).toBe('PATCH');
+    expect(JSON.parse(opts.body)).toEqual({ pinned: false });
   });
 
   it('namespaces with no memories', async () => {
