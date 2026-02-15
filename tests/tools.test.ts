@@ -97,12 +97,15 @@ describe('Tool Definitions', () => {
       'memoclaw_tags',
       'memoclaw_history',
       'memoclaw_context',
+      'memoclaw_batch_update',
+      'memoclaw_core_memories',
+      'memoclaw_stats',
     ]));
   });
 
-  it('has 30 tools total', async () => {
+  it('has 33 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(30);
+    expect(result.tools).toHaveLength(33);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -1367,5 +1370,150 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_history', arguments: { id: 'm1' } },
     });
     expect(result.content[0].text).toContain('No edit history found');
+  });
+});
+
+// ─── Batch Update ──────────────────────────────────────────────────────────
+
+describe('memoclaw_batch_update', () => {
+  it('definition exists with required updates field', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_batch_update');
+    expect(tool).toBeDefined();
+    expect(tool.inputSchema.required).toContain('updates');
+  });
+
+  it('calls batch-update endpoint', async () => {
+    globalThis.fetch = mockFetchOk({ updated: 2, memories: [{ id: 'm1', content: 'a' }, { id: 'm2', content: 'b' }] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_update', arguments: { updates: [{ id: 'm1', importance: 0.9 }, { id: 'm2', tags: ['x'] }] } },
+    });
+    expect(result.content[0].text).toContain('Batch update');
+    expect(result.content[0].text).toContain('2');
+  });
+
+  it('falls back to individual PATCH on 404', async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string, opts: any) => {
+      callCount++;
+      if (callCount === 1) {
+        // First call is batch endpoint - return 404
+        return { ok: false, status: 404, text: () => Promise.resolve('Not Found'), headers: new Headers() };
+      }
+      // Subsequent calls are individual PATCHes
+      return { ok: true, status: 200, json: () => Promise.resolve({ memory: { id: 'mx', content: 'updated' } }), text: () => Promise.resolve('{}'), headers: new Headers() };
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_update', arguments: { updates: [{ id: 'm1', importance: 0.8 }] } },
+    });
+    expect(result.content[0].text).toContain('1 updated');
+  });
+
+  it('rejects empty updates array', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_update', arguments: { updates: [] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('non-empty');
+  });
+
+  it('rejects updates without id', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_update', arguments: { updates: [{ importance: 0.5 }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('missing "id"');
+  });
+
+  it('rejects more than 50 updates', async () => {
+    const updates = Array.from({ length: 51 }, (_, i) => ({ id: `m${i}`, importance: 0.5 }));
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_update', arguments: { updates } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('50');
+  });
+});
+
+// ─── Core Memories ─────────────────────────────────────────────────────────
+
+describe('memoclaw_core_memories', () => {
+  it('definition exists', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_core_memories');
+    expect(tool).toBeDefined();
+  });
+
+  it('returns core memories', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: 'c1', content: 'core fact', importance: 0.95, pinned: true }] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_core_memories', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('1 core memories');
+    expect(result.content[0].text).toContain('core fact');
+  });
+
+  it('passes filters as query params', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    await callToolHandler({
+      params: { name: 'memoclaw_core_memories', arguments: { limit: 5, namespace: 'work', agent_id: 'a1' } },
+    });
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('limit=5');
+    expect(url).toContain('namespace=work');
+    expect(url).toContain('agent_id=a1');
+  });
+
+  it('handles empty response', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_core_memories', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('No core memories found');
+  });
+});
+
+// ─── Stats ─────────────────────────────────────────────────────────────────
+
+describe('memoclaw_stats', () => {
+  it('definition exists', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_stats');
+    expect(tool).toBeDefined();
+  });
+
+  it('returns formatted stats', async () => {
+    globalThis.fetch = mockFetchOk({
+      total_memories: 142,
+      pinned_count: 8,
+      never_accessed: 23,
+      total_accesses: 891,
+      avg_importance: 0.64,
+      oldest_memory: '2025-06-01T08:00:00Z',
+      newest_memory: '2026-02-13T10:30:00Z',
+      by_type: [{ memory_type: 'general', count: 100 }, { memory_type: 'correction', count: 42 }],
+      by_namespace: [{ namespace: 'default', count: 120 }, { namespace: 'work', count: 22 }],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_stats', arguments: {} },
+    });
+    const text = result.content[0].text;
+    expect(text).toContain('Memory Stats');
+    expect(text).toContain('142');
+    expect(text).toContain('Pinned: 8');
+    expect(text).toContain('0.64');
+    expect(text).toContain('general: 100');
+    expect(text).toContain('work: 22');
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('/v1/stats');
+  });
+
+  it('handles API error', async () => {
+    globalThis.fetch = mockFetchError(500, 'Internal Server Error');
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_stats', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('500');
   });
 });
