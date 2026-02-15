@@ -95,12 +95,13 @@ describe('Tool Definitions', () => {
       'memoclaw_delete_namespace', 'memoclaw_graph', 'memoclaw_pin', 'memoclaw_unpin',
       'memoclaw_namespaces',
       'memoclaw_tags',
+      'memoclaw_history',
     ]));
   });
 
-  it('has 25 tools total', async () => {
+  it('has 26 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(28);
+    expect(result.tools).toHaveLength(29);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -1250,5 +1251,40 @@ describe('Tool Handlers', () => {
     });
     const url = (globalThis.fetch as any).mock.calls[0][0] as string;
     expect(url).toContain('agent_id=ag1');
+  });
+
+  // ─── memoclaw_history ────────────────────────────────────────────────
+
+  it('history requires id', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_history', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('id is required');
+  });
+
+  it('history returns formatted versions', async () => {
+    globalThis.fetch = mockFetchOk({
+      history: [
+        { content: 'original text', importance: 0.5, created_at: '2025-01-01T00:00:00Z' },
+        { content: 'updated text', importance: 0.8, changed_fields: ['content', 'importance'], updated_at: '2025-01-02T00:00:00Z' },
+      ],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_history', arguments: { id: 'm1' } },
+    });
+    expect(result.content[0].text).toContain('2 versions');
+    expect(result.content[0].text).toContain('original text');
+    expect(result.content[0].text).toContain('updated text');
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('/v1/memories/m1/history');
+  });
+
+  it('history handles empty result', async () => {
+    globalThis.fetch = mockFetchOk({ history: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_history', arguments: { id: 'm1' } },
+    });
+    expect(result.content[0].text).toContain('No edit history found');
   });
 });
