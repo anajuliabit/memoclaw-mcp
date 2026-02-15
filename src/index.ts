@@ -1021,6 +1021,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Paginate through all memories in namespace and delete them
         const deletedIds: string[] = [];
         const errors: string[] = [];
+        const failedIds = new Set<string>();
         let pages = 0;
         const pageSize = 100;
         const maxPages = 200; // Safety valve: 200 pages × 100 = 20k max
@@ -1029,9 +1030,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           pages++;
           const params = new URLSearchParams();
           params.set('limit', String(pageSize));
-          // Always fetch offset 0: successful deletes shrink the list.
-          // If ALL deletes on a page fail, we advance offset to skip them.
-          params.set('offset', String(errors.length));
+          // Offset past memories we already tried and failed to delete
+          params.set('offset', String(failedIds.size));
           params.set('namespace', namespace);
           if (agent_id) params.set('agent_id', agent_id);
           
@@ -1039,18 +1039,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const memories = result.memories || result.data || [];
           if (memories.length === 0) break;
           
+          // Filter out memories we already failed to delete (in case offset doesn't skip them exactly)
+          const toDelete = memories.filter((m: any) => !failedIds.has(m.id));
+          if (toDelete.length === 0) break;
+          
           const deleteResults = await withConcurrency(
-            memories.map((m: any) => () => makeRequest('DELETE', `/v1/memories/${m.id}`)),
+            toDelete.map((m: any) => () => makeRequest('DELETE', `/v1/memories/${m.id}`)),
             10
           );
           
           let pageSuccesses = 0;
           for (let i = 0; i < deleteResults.length; i++) {
             if (deleteResults[i].status === 'fulfilled') {
-              deletedIds.push(memories[i].id);
+              deletedIds.push(toDelete[i].id);
               pageSuccesses++;
             } else {
-              errors.push(`${memories[i].id}: ${(deleteResults[i] as PromiseRejectedResult).reason?.message || 'unknown'}`);
+              failedIds.add(toDelete[i].id);
+              errors.push(`${toDelete[i].id}: ${(deleteResults[i] as PromiseRejectedResult).reason?.message || 'unknown'}`);
             }
           }
           
