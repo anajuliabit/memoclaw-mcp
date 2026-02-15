@@ -181,7 +181,7 @@ const UPDATE_FIELDS = new Set([
 ]);
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.11.0' },
+  { name: 'memoclaw', version: '1.12.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -696,6 +696,29 @@ const TOOLS = [
       properties: {
         agent_id: { type: 'string', description: 'Only list namespaces for this agent.' },
       },
+    },
+  },
+  {
+    name: 'memoclaw_context',
+    description:
+      '🧠 CONTEXT: Get contextually relevant memories for your current situation. ' +
+      'Unlike memoclaw_recall (single query), this uses GPT-4o-mini to analyze your prompt and ' +
+      'intelligently select the most relevant memories across multiple dimensions (semantic similarity, ' +
+      'recency, importance, relations). ' +
+      'Use this when you need a curated set of memories for a complex task — e.g. "prepare for a meeting with Bob" ' +
+      'or "what do I know about the frontend migration?". ' +
+      'Returns a ranked list of memories with relevance explanations. ' +
+      'Costs $0.01 per call (uses GPT-4o-mini + embeddings).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'Describe your current situation or what you need context for. Be descriptive — e.g. "preparing a code review for the auth module" rather than just "auth".' },
+        limit: { type: 'number', description: 'Maximum number of memories to return. Default: 10. Max: 50.' },
+        namespace: { type: 'string', description: 'Only include memories from this namespace.' },
+        session_id: { type: 'string', description: 'Prioritize memories from this session.' },
+        agent_id: { type: 'string', description: 'Only include memories from this agent.' },
+      },
+      required: ['query'],
     },
   },
 ];
@@ -1437,6 +1460,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return parts.join('\n');
         }).join('\n\n');
         return { content: [{ type: 'text', text: `📜 History for memory ${id} (${history.length} versions):\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      }
+
+      case 'memoclaw_context': {
+        const { query, limit, namespace, session_id, agent_id } = args as any;
+        if (!query || (typeof query === 'string' && query.trim() === '')) {
+          throw new Error('query is required and cannot be empty');
+        }
+        const body: any = { query };
+        if (limit !== undefined) body.limit = limit;
+        if (namespace) body.namespace = namespace;
+        if (session_id) body.session_id = session_id;
+        if (agent_id) body.agent_id = agent_id;
+        const result = await makeRequest('POST', '/v1/context', body);
+        const memories = result.memories || result.context || [];
+        if (memories.length === 0) {
+          return { content: [{ type: 'text', text: `No relevant context found for: "${query}"` }] };
+        }
+        const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
+        return { content: [{ type: 'text', text: `🧠 Context for "${query}" (${memories.length} memories):\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
       }
 
       case 'memoclaw_namespaces': {
