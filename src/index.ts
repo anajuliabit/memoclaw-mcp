@@ -181,7 +181,7 @@ const UPDATE_FIELDS = new Set([
 ]);
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.10.0' },
+  { name: 'memoclaw', version: '1.11.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -669,6 +669,20 @@ const TOOLS = [
         namespace: { type: 'string', description: 'Only list tags from memories in this namespace.' },
         agent_id: { type: 'string', description: 'Only list tags for this agent.' },
       },
+    },
+  },
+  {
+    name: 'memoclaw_history',
+    description:
+      '📜 View the edit history of a specific memory. Shows all past versions including content changes, ' +
+      'importance updates, tag modifications, and other field changes over time. ' +
+      'Use this to audit how a memory evolved or to understand when and what was changed.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'The memory ID to view history for.' },
+      },
+      required: ['id'],
     },
   },
   {
@@ -1398,6 +1412,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
         const lines = sorted.map(([tag, count]) => `  • ${tag}: ${count} memories`);
         return { content: [{ type: 'text', text: `🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}` }] };
+      }
+
+      case 'memoclaw_history': {
+        const { id } = args as any;
+        if (!id) throw new Error('id is required');
+        const result = await makeRequest('GET', `/v1/memories/${id}/history`);
+        const history = result.history || result.versions || result.data || [];
+        if (history.length === 0) {
+          return { content: [{ type: 'text', text: `No edit history found for memory ${id}.` }] };
+        }
+        const formatted = history.map((entry: any, i: number) => {
+          const parts = [`Version ${i + 1}`];
+          if (entry.content) parts.push(`  content: ${entry.content.substring(0, 200)}${entry.content.length > 200 ? '...' : ''}`);
+          if (entry.importance !== undefined) parts.push(`  importance: ${entry.importance}`);
+          if (entry.tags?.length) parts.push(`  tags: ${entry.tags.join(', ')}`);
+          if (entry.memory_type) parts.push(`  type: ${entry.memory_type}`);
+          if (entry.namespace) parts.push(`  namespace: ${entry.namespace}`);
+          if (entry.pinned !== undefined) parts.push(`  pinned: ${entry.pinned}`);
+          if (entry.changed_at || entry.updated_at || entry.created_at) {
+            parts.push(`  date: ${entry.changed_at || entry.updated_at || entry.created_at}`);
+          }
+          if (entry.changed_fields) parts.push(`  changed: ${Array.isArray(entry.changed_fields) ? entry.changed_fields.join(', ') : entry.changed_fields}`);
+          return parts.join('\n');
+        }).join('\n\n');
+        return { content: [{ type: 'text', text: `📜 History for memory ${id} (${history.length} versions):\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
       }
 
       case 'memoclaw_namespaces': {
