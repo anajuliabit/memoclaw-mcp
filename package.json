@@ -1,6 +1,6 @@
 {
   "name": "memoclaw-mcp",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "MCP server for MemoClaw semantic memory API. 1000 free calls per wallet.",
   "type": "module",
   "main": "dist/index.js",

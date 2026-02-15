@@ -181,7 +181,7 @@ const UPDATE_FIELDS = new Set([
 ]);
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.9.0' },
+  { name: 'memoclaw', version: '1.10.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -655,6 +655,20 @@ const TOOLS = [
         id: { type: 'string', description: 'The memory ID to unpin.' },
       },
       required: ['id'],
+    },
+  },
+  {
+    name: 'memoclaw_tags',
+    description:
+      '🏷️ List all unique tags across your memories with counts. ' +
+      'Use this to discover what tags exist before filtering recall/list/search by tags. ' +
+      'Returns tags sorted by usage count (most used first).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        namespace: { type: 'string', description: 'Only list tags from memories in this namespace.' },
+        agent_id: { type: 'string', description: 'Only list tags for this agent.' },
+      },
     },
   },
   {
@@ -1346,6 +1360,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!id) throw new Error('id is required');
         const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: false });
         return { content: [{ type: 'text', text: `📌 Memory ${id} unpinned\n${formatMemory(result.memory || result)}` }] };
+      }
+
+      case 'memoclaw_tags': {
+        const { namespace, agent_id } = args as any;
+        const tagCounts = new Map<string, number>();
+        let offset = 0;
+        const pageSize = 100;
+        const maxPages = 200;
+        
+        for (let page = 0; page < maxPages; page++) {
+          const params = new URLSearchParams();
+          params.set('limit', String(pageSize));
+          params.set('offset', String(offset));
+          if (namespace) params.set('namespace', namespace);
+          if (agent_id) params.set('agent_id', agent_id);
+          
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          const memories = result.memories || result.data || [];
+          if (memories.length === 0) break;
+          
+          for (const m of memories) {
+            const tags = m.tags || m.metadata?.tags || [];
+            for (const tag of tags) {
+              tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+            }
+          }
+          
+          if (memories.length < pageSize) break;
+          offset += pageSize;
+        }
+        
+        if (tagCounts.size === 0) {
+          return { content: [{ type: 'text', text: 'No tags found across memories.' }] };
+        }
+        
+        const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
+        const lines = sorted.map(([tag, count]) => `  • ${tag}: ${count} memories`);
+        return { content: [{ type: 'text', text: `🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}` }] };
       }
 
       case 'memoclaw_namespaces': {
