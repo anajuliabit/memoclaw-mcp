@@ -181,7 +181,7 @@ const UPDATE_FIELDS = new Set([
 ]);
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.8.0' },
+  { name: 'memoclaw', version: '1.9.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -627,6 +627,34 @@ const TOOLS = [
         relation_type: { type: 'string', enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'], description: 'Only follow relations of this type. Default: all types.' },
       },
       required: ['memory_id'],
+    },
+  },
+  {
+    name: 'memoclaw_pin',
+    description:
+      '📌 Pin a memory to prevent it from decaying over time. ' +
+      'Pinned memories persist indefinitely and are never auto-deleted by decay. ' +
+      'Shortcut for memoclaw_update with pinned=true.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'The memory ID to pin.' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'memoclaw_unpin',
+    description:
+      '📌 Unpin a memory, re-enabling normal decay behavior. ' +
+      'After unpinning, the memory will decay according to its memory_type. ' +
+      'Shortcut for memoclaw_update with pinned=false.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'The memory ID to unpin.' },
+      },
+      required: ['id'],
     },
   },
   {
@@ -1304,6 +1332,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           throw err;
         }
+      }
+
+      case 'memoclaw_pin': {
+        const { id } = args as any;
+        if (!id) throw new Error('id is required');
+        const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: true });
+        return { content: [{ type: 'text', text: `📌 Memory ${id} pinned\n${formatMemory(result.memory || result)}` }] };
+      }
+
+      case 'memoclaw_unpin': {
+        const { id } = args as any;
+        if (!id) throw new Error('id is required');
+        const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: false });
+        return { content: [{ type: 'text', text: `📌 Memory ${id} unpinned\n${formatMemory(result.memory || result)}` }] };
       }
 
       case 'memoclaw_namespaces': {
