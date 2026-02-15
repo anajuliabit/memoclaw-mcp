@@ -181,7 +181,7 @@ const UPDATE_FIELDS = new Set([
 ]);
 
 const server = new Server(
-  { name: 'memoclaw', version: '1.7.0' },
+  { name: 'memoclaw', version: '1.8.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -627,6 +627,19 @@ const TOOLS = [
         relation_type: { type: 'string', enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'], description: 'Only follow relations of this type. Default: all types.' },
       },
       required: ['memory_id'],
+    },
+  },
+  {
+    name: 'memoclaw_namespaces',
+    description:
+      'List all namespaces that contain memories. Returns an array of namespace names with memory counts. ' +
+      'Use this to discover what namespaces exist before filtering recall/list/search by namespace. ' +
+      'Memories without a namespace appear under "(default)".',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agent_id: { type: 'string', description: 'Only list namespaces for this agent.' },
+      },
     },
   },
 ];
@@ -1291,6 +1304,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           throw err;
         }
+      }
+
+      case 'memoclaw_namespaces': {
+        const { agent_id } = args as any;
+        const nsCounts = new Map<string, number>();
+        let offset = 0;
+        const pageSize = 100;
+        const maxPages = 200;
+        
+        for (let page = 0; page < maxPages; page++) {
+          const params = new URLSearchParams();
+          params.set('limit', String(pageSize));
+          params.set('offset', String(offset));
+          if (agent_id) params.set('agent_id', agent_id);
+          
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          const memories = result.memories || result.data || [];
+          if (memories.length === 0) break;
+          
+          for (const m of memories) {
+            const ns = m.namespace || '(default)';
+            nsCounts.set(ns, (nsCounts.get(ns) || 0) + 1);
+          }
+          
+          if (memories.length < pageSize) break;
+          offset += pageSize;
+        }
+        
+        if (nsCounts.size === 0) {
+          return { content: [{ type: 'text', text: 'No memories found — no namespaces to list.' }] };
+        }
+        
+        const sorted = [...nsCounts.entries()].sort((a, b) => b[1] - a[1]);
+        const lines = sorted.map(([ns, count]) => `  • ${ns}: ${count} memories`);
+        return { content: [{ type: 'text', text: `📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}` }] };
       }
 
       default:
