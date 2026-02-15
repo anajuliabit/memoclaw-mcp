@@ -94,12 +94,13 @@ describe('Tool Definitions', () => {
       'memoclaw_export', 'memoclaw_import', 'memoclaw_bulk_store', 'memoclaw_count',
       'memoclaw_delete_namespace', 'memoclaw_graph', 'memoclaw_pin', 'memoclaw_unpin',
       'memoclaw_namespaces',
+      'memoclaw_tags',
     ]));
   });
 
   it('has 25 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(27);
+    expect(result.tools).toHaveLength(28);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -1181,6 +1182,57 @@ describe('Tool Handlers', () => {
     expect(url).toContain('/v1/memories/m1');
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ pinned: false });
+  });
+
+  // ─── memoclaw_tags ──────────────────────────────────────────────────
+
+  it('tags lists unique tags with counts', async () => {
+    globalThis.fetch = mockFetchOk({
+      memories: [
+        { id: '1', content: 'a', tags: ['frontend', 'react'] },
+        { id: '2', content: 'b', tags: ['frontend', 'vue'] },
+        { id: '3', content: 'c', tags: ['backend'] },
+        { id: '4', content: 'd' },
+      ],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('4 tags');
+    expect(result.content[0].text).toContain('frontend: 2 memories');
+    expect(result.content[0].text).toContain('react: 1 memories');
+    expect(result.content[0].text).toContain('vue: 1 memories');
+    expect(result.content[0].text).toContain('backend: 1 memories');
+  });
+
+  it('tags with no memories', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('No tags found');
+  });
+
+  it('tags passes namespace and agent_id filters', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1', content: 'a', tags: ['t1'] }] });
+    await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: { namespace: 'work', agent_id: 'ag1' } },
+    });
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('namespace=work');
+    expect(url).toContain('agent_id=ag1');
+  });
+
+  it('tags reads from metadata.tags fallback', async () => {
+    globalThis.fetch = mockFetchOk({
+      memories: [
+        { id: '1', content: 'a', metadata: { tags: ['meta-tag'] } },
+      ],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('meta-tag: 1 memories');
   });
 
   it('namespaces with no memories', async () => {
