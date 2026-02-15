@@ -162,7 +162,7 @@ const UPDATE_FIELDS = new Set([
     'content', 'importance', 'memory_type', 'namespace',
     'metadata', 'expires_at', 'pinned', 'tags',
 ]);
-const server = new Server({ name: 'memoclaw', version: '1.12.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'memoclaw', version: '1.13.0' }, { capabilities: { tools: {} } });
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 const TOOLS = [
     {
@@ -667,6 +667,63 @@ const TOOLS = [
                 agent_id: { type: 'string', description: 'Only include memories from this agent.' },
             },
             required: ['query'],
+        },
+    },
+    {
+        name: 'memoclaw_batch_update',
+        description: 'Update multiple memories in a single call. Each update specifies a memory ID and the fields to change. ' +
+            'More efficient than calling memoclaw_update in a loop. Max 50 updates per call. ' +
+            'If any update changes content, the embedding is regenerated. ' +
+            'Costs $0.005 per call (uses embeddings).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                updates: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', description: 'The memory ID to update.' },
+                            content: { type: 'string', description: 'New content (re-embeds automatically).' },
+                            importance: { type: 'number', description: 'New importance score (0.0-1.0).' },
+                            memory_type: { type: 'string', enum: ['correction', 'preference', 'decision', 'project', 'observation', 'general'], description: 'New memory type.' },
+                            namespace: { type: 'string', description: 'Move memory to a different namespace.' },
+                            metadata: { type: 'object', description: 'Replace metadata object.' },
+                            expires_at: { type: 'string', description: 'New expiry date (ISO 8601) or null to remove.' },
+                            pinned: { type: 'boolean', description: 'Pin or unpin the memory.' },
+                            tags: { type: 'array', items: { type: 'string' }, description: 'Replace tags array.' },
+                        },
+                        required: ['id'],
+                    },
+                    description: 'Array of update objects. Each must have an "id" and at least one field to change. Max 50.',
+                },
+            },
+            required: ['updates'],
+        },
+    },
+    {
+        name: 'memoclaw_core_memories',
+        description: '⭐ Get your most important memories — high importance, frequently accessed, or pinned. ' +
+            'Core memories are the foundational facts the agent should always have available: user preferences, ' +
+            'critical corrections, key decisions. Use this at the start of a session to load essential context. ' +
+            'Returns memories sorted by importance and access frequency. FREE endpoint.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                limit: { type: 'number', description: 'Maximum number of core memories to return. Default: 10. Max: 50.' },
+                namespace: { type: 'string', description: 'Only return core memories from this namespace.' },
+                agent_id: { type: 'string', description: 'Only return core memories for this agent.' },
+            },
+        },
+    },
+    {
+        name: 'memoclaw_stats',
+        description: '📊 Get memory usage statistics for your wallet. Returns aggregate stats including total memories, ' +
+            'pinned count, access counts, average importance, oldest/newest memory timestamps, and breakdowns ' +
+            'by memory type and namespace. FREE endpoint — call this to get an overview of your memory usage.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
         },
     },
 ];
@@ -1479,6 +1536,105 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const sorted = [...nsCounts.entries()].sort((a, b) => b[1] - a[1]);
                 const lines = sorted.map(([ns, count]) => `  • ${ns}: ${count} memories`);
                 return { content: [{ type: 'text', text: `📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}` }] };
+            }
+            case 'memoclaw_batch_update': {
+                const { updates } = args;
+                if (!updates || !Array.isArray(updates) || updates.length === 0) {
+                    throw new Error('updates is required and must be a non-empty array');
+                }
+                if (updates.length > 50) {
+                    throw new Error('Maximum 50 updates per batch update call');
+                }
+                for (const [i, u] of updates.entries()) {
+                    if (!u.id)
+                        throw new Error(`Update at index ${i} is missing "id"`);
+                }
+                // Try dedicated batch endpoint first, fall back to individual PATCH calls
+                try {
+                    const result = await makeRequest('POST', '/v1/memories/batch-update', { updates });
+                    const updated = result.updated ?? result.memories?.length ?? '?';
+                    const memories = result.memories || [];
+                    let text = `✅ Batch update: ${updated} memories updated`;
+                    if (memories.length > 0)
+                        text += `\n\n${memories.map((m) => formatMemory(m)).join('\n\n')}`;
+                    return { content: [{ type: 'text', text: `${text}\n\n${JSON.stringify(result, null, 2)}` }] };
+                }
+                catch (err) {
+                    if (err.message?.includes('404') || err.message?.includes('Not Found')) {
+                        // Fallback: individual PATCH calls
+                        const results = await withConcurrency(updates.map((u) => () => {
+                            const { id, ...fields } = u;
+                            const updateFields = {};
+                            for (const [key, value] of Object.entries(fields)) {
+                                if (UPDATE_FIELDS.has(key) && value !== undefined) {
+                                    updateFields[key] = value;
+                                }
+                            }
+                            return makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
+                        }), 10);
+                        const succeeded = results.filter(r => r.status === 'fulfilled');
+                        const failed = results.filter(r => r.status === 'rejected');
+                        const memories = succeeded.map(r => r.value?.memory || r.value);
+                        const errors = failed.map((r) => {
+                            const idx = results.indexOf(r);
+                            return `${updates[idx]?.id}: ${r.reason?.message || 'unknown error'}`;
+                        });
+                        let text = `✅ Batch update: ${succeeded.length} updated, ${failed.length} failed`;
+                        if (memories.length > 0)
+                            text += `\n\n${memories.map((m) => formatMemory(m)).join('\n\n')}`;
+                        if (errors.length > 0)
+                            text += `\n\nErrors:\n${errors.join('\n')}`;
+                        return { content: [{ type: 'text', text }] };
+                    }
+                    throw err;
+                }
+            }
+            case 'memoclaw_core_memories': {
+                const { limit, namespace, agent_id } = args;
+                const params = new URLSearchParams();
+                if (limit !== undefined)
+                    params.set('limit', String(limit));
+                if (namespace)
+                    params.set('namespace', namespace);
+                if (agent_id)
+                    params.set('agent_id', agent_id);
+                const qs = params.toString();
+                const result = await makeRequest('GET', `/v1/core-memories${qs ? '?' + qs : ''}`);
+                const memories = result.memories || result.core_memories || result.data || [];
+                if (memories.length === 0) {
+                    return { content: [{ type: 'text', text: 'No core memories found. Store important memories with high importance scores or pin them.' }] };
+                }
+                const formatted = memories.map((m) => formatMemory(m)).join('\n\n');
+                return { content: [{ type: 'text', text: `⭐ ${memories.length} core memories:\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+            }
+            case 'memoclaw_stats': {
+                const result = await makeRequest('GET', '/v1/stats');
+                const lines = [];
+                if (result.total_memories !== undefined)
+                    lines.push(`Total memories: ${result.total_memories}`);
+                if (result.pinned_count !== undefined)
+                    lines.push(`Pinned: ${result.pinned_count}`);
+                if (result.never_accessed !== undefined)
+                    lines.push(`Never accessed: ${result.never_accessed}`);
+                if (result.total_accesses !== undefined)
+                    lines.push(`Total accesses: ${result.total_accesses}`);
+                if (result.avg_importance !== undefined)
+                    lines.push(`Avg importance: ${typeof result.avg_importance === 'number' ? result.avg_importance.toFixed(2) : result.avg_importance}`);
+                if (result.oldest_memory)
+                    lines.push(`Oldest: ${result.oldest_memory}`);
+                if (result.newest_memory)
+                    lines.push(`Newest: ${result.newest_memory}`);
+                if (result.by_type?.length) {
+                    lines.push('\nBy type:');
+                    for (const t of result.by_type)
+                        lines.push(`  • ${t.memory_type || t.type}: ${t.count}`);
+                }
+                if (result.by_namespace?.length) {
+                    lines.push('\nBy namespace:');
+                    for (const n of result.by_namespace)
+                        lines.push(`  • ${n.namespace || '(default)'}: ${n.count}`);
+                }
+                return { content: [{ type: 'text', text: `📊 Memory Stats\n\n${lines.join('\n')}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
             }
             default:
                 throw new Error(`Unknown tool: ${name}`);
