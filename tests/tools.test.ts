@@ -92,13 +92,13 @@ describe('Tool Definitions', () => {
       'memoclaw_consolidate', 'memoclaw_suggested',
       'memoclaw_create_relation', 'memoclaw_list_relations', 'memoclaw_delete_relation',
       'memoclaw_export', 'memoclaw_import', 'memoclaw_bulk_store', 'memoclaw_count',
-      'memoclaw_delete_namespace', 'memoclaw_graph',
+      'memoclaw_delete_namespace', 'memoclaw_graph', 'memoclaw_namespaces',
     ]));
   });
 
-  it('has 24 tools total', async () => {
+  it('has 25 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(24);
+    expect(result.tools).toHaveLength(25);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -1118,5 +1118,42 @@ describe('Tool Handlers', () => {
     // Should still return a result (with fallback content), not crash
     expect(result.content[0].text).toContain('Graph from missing');
     expect(result.content[0].text).toContain('could not fetch');
+  });
+
+  // --- Namespaces ---
+
+  it('namespaces returns unique namespaces with counts', async () => {
+    globalThis.fetch = mockFetchOk({
+      memories: [
+        { id: '1', content: 'a', namespace: 'work' },
+        { id: '2', content: 'b', namespace: 'work' },
+        { id: '3', content: 'c', namespace: 'personal' },
+        { id: '4', content: 'd' },
+      ],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_namespaces', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('3 namespaces');
+    expect(result.content[0].text).toContain('work: 2 memories');
+    expect(result.content[0].text).toContain('personal: 1 memories');
+    expect(result.content[0].text).toContain('(default): 1 memories');
+  });
+
+  it('namespaces with no memories', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_namespaces', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('No memories found');
+  });
+
+  it('namespaces passes agent_id filter', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1', content: 'a', namespace: 'ns1' }] });
+    await callToolHandler({
+      params: { name: 'memoclaw_namespaces', arguments: { agent_id: 'ag1' } },
+    });
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('agent_id=ag1');
   });
 });
