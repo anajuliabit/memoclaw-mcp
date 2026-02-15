@@ -96,12 +96,13 @@ describe('Tool Definitions', () => {
       'memoclaw_namespaces',
       'memoclaw_tags',
       'memoclaw_history',
+      'memoclaw_context',
     ]));
   });
 
-  it('has 26 tools total', async () => {
+  it('has 30 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(29);
+    expect(result.tools).toHaveLength(30);
   });
 
   it('delete_namespace requires namespace', async () => {
@@ -171,6 +172,13 @@ describe('Tool Definitions', () => {
     const result = await listToolsHandler();
     const tool = result.tools.find((t: any) => t.name === 'memoclaw_graph');
     expect(tool.inputSchema.required).toContain('memory_id');
+  });
+
+  it('context requires query', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_context');
+    expect(tool).toBeDefined();
+    expect(tool.inputSchema.required).toContain('query');
   });
 
   it('search has after filter', async () => {
@@ -1251,6 +1259,79 @@ describe('Tool Handlers', () => {
     });
     const url = (globalThis.fetch as any).mock.calls[0][0] as string;
     expect(url).toContain('agent_id=ag1');
+  });
+
+  // ─── memoclaw_context ──────────────────────────────────────────────
+
+  it('context requires query', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_context', arguments: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('query is required');
+  });
+
+  it('context with empty query returns error', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_context', arguments: { query: '' } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('query is required');
+  });
+
+  it('context returns formatted results', async () => {
+    globalThis.fetch = mockFetchOk({
+      memories: [
+        { id: '1', content: 'Bob prefers morning meetings', importance: 0.8, tags: ['meetings'] },
+        { id: '2', content: 'Bob is the frontend lead', importance: 0.6 },
+      ],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_context', arguments: { query: 'prepare for meeting with Bob' } },
+    });
+    expect(result.content[0].text).toContain('Context for');
+    expect(result.content[0].text).toContain('2 memories');
+    expect(result.content[0].text).toContain('Bob prefers morning meetings');
+  });
+
+  it('context with no results', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_context', arguments: { query: 'something obscure' } },
+    });
+    expect(result.content[0].text).toContain('No relevant context found');
+  });
+
+  it('context passes all params correctly', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [] });
+    await callToolHandler({
+      params: { name: 'memoclaw_context', arguments: { query: 'test', limit: 5, namespace: 'work', session_id: 's1', agent_id: 'ag1' } },
+    });
+    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    expect(body.query).toBe('test');
+    expect(body.limit).toBe(5);
+    expect(body.namespace).toBe('work');
+    expect(body.session_id).toBe('s1');
+    expect(body.agent_id).toBe('ag1');
+  });
+
+  it('context calls POST /v1/context', async () => {
+    globalThis.fetch = mockFetchOk({ context: [{ id: '1', content: 'test' }] });
+    await callToolHandler({
+      params: { name: 'memoclaw_context', arguments: { query: 'test' } },
+    });
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('/v1/context');
+    const opts = (globalThis.fetch as any).mock.calls[0][1];
+    expect(opts.method).toBe('POST');
+  });
+
+  it('context handles "context" response key', async () => {
+    globalThis.fetch = mockFetchOk({ context: [{ id: '1', content: 'from context key' }] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_context', arguments: { query: 'test' } },
+    });
+    expect(result.content[0].text).toContain('from context key');
   });
 
   // ─── memoclaw_history ────────────────────────────────────────────────
