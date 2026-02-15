@@ -87,9 +87,14 @@ async function makeRequest(method, path, body) {
         const paymentRequired = client.getPaymentRequiredResponse((name) => res.headers.get(name), errorBody);
         const paymentPayload = await client.createPaymentPayload(paymentRequired);
         const paymentHeaders = client.encodePaymentSignatureHeader(paymentPayload);
+        // Ensure Content-Type is preserved on retry when body is present
+        const retryHeaders = { ...headers, ...paymentHeaders };
+        if (body && !retryHeaders['Content-Type']) {
+            retryHeaders['Content-Type'] = 'application/json';
+        }
         res = await fetch(url, {
             method,
-            headers: { ...headers, ...paymentHeaders },
+            headers: retryHeaders,
             body: body ? JSON.stringify(body) : undefined,
         });
     }
@@ -974,18 +979,54 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     params.set('agent_id', agent_id);
                 if (memory_type)
                     params.set('memory_type', memory_type);
-                let total;
+                let total = 'unknown';
                 try {
                     // Try dedicated count endpoint first
                     const countResult = await makeRequest('GET', `/v1/memories/count?${params}`);
                     total = countResult.count ?? countResult.total ?? 'unknown';
                 }
                 catch {
-                    // Fall back to list with limit=1 and read total from response
+                    // Fall back to list endpoint - paginate to get accurate count
+                    // First try with limit=1 to check if API returns total in response
                     params.set('limit', '1');
                     params.set('offset', '0');
                     const result = await makeRequest('GET', `/v1/memories?${params}`);
-                    total = result.total ?? (result.memories || result.data || []).length;
+                    if (typeof result.total === 'number') {
+                        total = result.total;
+                    }
+                    else {
+                        // No total field - paginate to count all memories
+                        const memories = result.memories || result.data || [];
+                        if (memories.length === 0) {
+                            total = 0;
+                        }
+                        else {
+                            // Paginate with larger pages to count
+                            let counted = 0;
+                            let offset = 0;
+                            const pageSize = 100;
+                            const maxItems = 100000; // Safety limit
+                            while (offset < maxItems) {
+                                const pageParams = new URLSearchParams(params);
+                                pageParams.set('limit', String(pageSize));
+                                pageParams.set('offset', String(offset));
+                                const page = await makeRequest('GET', `/v1/memories?${pageParams}`);
+                                const items = page.memories || page.data || [];
+                                counted += items.length;
+                                if (typeof page.total === 'number') {
+                                    total = page.total;
+                                    break;
+                                }
+                                if (items.length < pageSize) {
+                                    total = counted;
+                                    break;
+                                }
+                                offset += pageSize;
+                            }
+                            if (typeof total === 'undefined')
+                                total = `${counted}+`;
+                        }
+                    }
                 }
                 const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, tags?.length && `tags=${tags.join(',')}`].filter(Boolean);
                 const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
