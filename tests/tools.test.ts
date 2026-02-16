@@ -1217,6 +1217,46 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('backend: 1 memories');
   });
 
+  it('tags uses /v1/tags endpoint when available', async () => {
+    globalThis.fetch = mockFetchOk({
+      tags: [{ tag: 'frontend', count: 5 }, { tag: 'backend', count: 3 }],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('2 tags');
+    expect(result.content[0].text).toContain('frontend: 5 memories');
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('/v1/tags');
+  });
+
+  it('tags falls back to client-side when /v1/tags returns error', async () => {
+    let callNum = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callNum++;
+      if (callNum === 1) {
+        // /v1/tags endpoint fails
+        return Promise.resolve({
+          ok: false, status: 404,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve('Not Found'),
+          headers: new Headers(),
+        });
+      }
+      // Fallback: /v1/memories pagination
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve({ memories: [{ id: '1', content: 'a', tags: ['fallback-tag'] }] }),
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      });
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_tags', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('fallback-tag');
+  });
+
   it('tags with no memories', async () => {
     globalThis.fetch = mockFetchOk({ memories: [] });
     const result = await callToolHandler({
@@ -1245,6 +1285,19 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_tags', arguments: {} },
     });
     expect(result.content[0].text).toContain('meta-tag: 1 memories');
+  });
+
+  it('namespaces uses /v1/namespaces endpoint when available', async () => {
+    globalThis.fetch = mockFetchOk({
+      namespaces: [{ namespace: 'work', count: 10 }, { namespace: 'personal', count: 5 }],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_namespaces', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('2 namespaces');
+    expect(result.content[0].text).toContain('work: 10 memories');
+    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    expect(url).toContain('/v1/namespaces');
   });
 
   it('namespaces with no memories', async () => {
