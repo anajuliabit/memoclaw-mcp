@@ -170,7 +170,7 @@ const TOOLS = [
         description: 'Store a new memory. The content is embedded for semantic search. ' +
             'Use tags and namespace to organize memories. Set importance (0-1) to influence recall ranking. ' +
             'Use memory_type to control how the memory decays over time. Pin important memories to prevent decay. ' +
-            'Returns the created memory object with its ID. Free tier: 1000 calls/wallet.',
+            'Returns the created memory object with its ID. Free tier: 100 calls/wallet.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -314,7 +314,7 @@ const TOOLS = [
     },
     {
         name: 'memoclaw_status',
-        description: 'Check your wallet\'s free tier usage. Shows remaining API calls out of the 1000 free calls per wallet. ' +
+        description: 'Check your wallet\'s free tier usage. Shows remaining API calls out of the 100 free calls per wallet. ' +
             'Call this to know if you\'re about to hit the limit before paid (x402) kicks in.',
         inputSchema: {
             type: 'object',
@@ -882,7 +882,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case 'memoclaw_status': {
                 const data = await makeRequest('GET', '/v1/free-tier/status');
                 const remaining = data.free_tier_remaining ?? 'unknown';
-                const total = data.free_tier_total ?? 1000;
+                const total = data.free_tier_total ?? 100;
                 const pct = typeof remaining === 'number' ? Math.round((remaining / total) * 100) : '?';
                 return {
                     content: [{
@@ -1288,7 +1288,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 try {
                     const data = await makeRequest('GET', '/v1/free-tier/status');
                     const remaining = data.free_tier_remaining ?? 'unknown';
-                    const total = data.free_tier_total ?? 1000;
+                    const total = data.free_tier_total ?? 100;
                     checks.push(`✅ API reachable`);
                     checks.push(`📊 Free tier: ${remaining}/${total} calls remaining`);
                     if (typeof remaining === 'number' && remaining <= 0) {
