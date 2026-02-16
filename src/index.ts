@@ -174,6 +174,18 @@ async function withConcurrency<T>(tasks: (() => Promise<T>)[], limit: number): P
   return results;
 }
 
+/** Maximum content length per memory (server enforces 8192 chars) */
+const MAX_CONTENT_LENGTH = 8192;
+
+function validateContentLength(content: string, label = 'content'): void {
+  if (content.length > MAX_CONTENT_LENGTH) {
+    throw new Error(
+      `${label} exceeds the ${MAX_CONTENT_LENGTH} character limit (got ${content.length} chars). ` +
+      `Split the content into smaller memories or summarize it.`
+    );
+  }
+}
+
 /** Allowed fields for the update endpoint */
 const UPDATE_FIELDS = new Set([
   'content', 'importance', 'memory_type', 'namespace',
@@ -797,6 +809,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!content || (typeof content === 'string' && content.trim() === '')) {
           throw new Error('content is required and cannot be empty');
         }
+        validateContentLength(content);
         const body: any = { content };
         if (importance !== undefined) body.importance = importance;
         if (tags) body.tags = tags;
@@ -1007,6 +1020,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (Object.keys(updateFields).length === 0) {
           throw new Error('No valid update fields provided. Allowed: ' + [...UPDATE_FIELDS].join(', '));
         }
+        if (typeof updateFields.content === 'string') {
+          validateContentLength(updateFields.content);
+        }
         const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
         return { content: [{ type: 'text', text: `✅ Memory ${id} updated\n${formatMemory(result.memory || result)}\n\n${JSON.stringify(result, null, 2)}` }] };
       }
@@ -1082,6 +1098,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
             throw new Error(`Memory at index ${i} has empty content`);
           }
+          validateContentLength(m.content, `Memory at index ${i}`);
         }
         const results = await withConcurrency(
           memories.map((m: any) => () => {
@@ -1119,6 +1136,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
             throw new Error(`Memory at index ${i} has empty content`);
           }
+          validateContentLength(m.content, `Memory at index ${i}`);
         }
         const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at'];
         const results = await withConcurrency(

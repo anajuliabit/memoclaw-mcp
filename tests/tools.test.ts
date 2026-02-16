@@ -310,6 +310,26 @@ describe('Tool Handlers', () => {
     expect(body.importance).toBe(0);
   });
 
+  it('store rejects content exceeding 8192 chars', async () => {
+    const longContent = 'x'.repeat(8193);
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: longContent } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('8192 character limit');
+    expect(result.content[0].text).toContain('8193');
+  });
+
+  it('store accepts content at exactly 8192 chars', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'ok' } });
+    const exactContent = 'x'.repeat(8192);
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: exactContent } },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('Memory stored');
+  });
+
   it('store sends pinned=false correctly', async () => {
     globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
     await callToolHandler({
@@ -642,6 +662,14 @@ describe('Tool Handlers', () => {
     expect(body.id).toBeUndefined();
   });
 
+  it('update rejects content exceeding 8192 chars', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_update', arguments: { id: '123', content: 'z'.repeat(8193) } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('8192 character limit');
+  });
+
   it('update rejects unknown fields', async () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_update', arguments: { id: '123', unknown_field: 'bad' } },
@@ -796,6 +824,14 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('Maximum 100');
   });
 
+  it('import rejects memory exceeding 8192 chars', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: { memories: [{ content: 'a'.repeat(8193) }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('8192 character limit');
+  });
+
   it('import validates each memory has content', async () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_import', arguments: { memories: [{ content: 'ok' }, { content: '' }] } },
@@ -840,6 +876,15 @@ describe('Tool Handlers', () => {
     });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Maximum 50');
+  });
+
+  it('bulk_store rejects memory exceeding 8192 chars', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'ok' }, { content: 'y'.repeat(8193) }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('index 1');
+    expect(result.content[0].text).toContain('8192 character limit');
   });
 
   it('bulk_store validates each memory has content', async () => {
