@@ -621,7 +621,8 @@ const TOOLS = [
         name: 'memoclaw_tags',
         description: '🏷️ List all unique tags across your memories with counts. ' +
             'Use this to discover what tags exist before filtering recall/list/search by tags. ' +
-            'Returns tags sorted by usage count (most used first).',
+            'Returns tags sorted by usage count (most used first). ' +
+            '⚠️ May be slow for wallets with many memories (falls back to client-side pagination if /v1/tags is unavailable).',
         inputSchema: {
             type: 'object',
             properties: {
@@ -647,7 +648,8 @@ const TOOLS = [
         name: 'memoclaw_namespaces',
         description: 'List all namespaces that contain memories. Returns an array of namespace names with memory counts. ' +
             'Use this to discover what namespaces exist before filtering recall/list/search by namespace. ' +
-            'Memories without a namespace appear under "(default)".',
+            'Memories without a namespace appear under "(default)". ' +
+            '⚠️ May be slow for wallets with many memories (falls back to client-side pagination if /v1/namespaces is unavailable).',
         inputSchema: {
             type: 'object',
             properties: {
@@ -1433,6 +1435,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case 'memoclaw_tags': {
                 const { namespace, agent_id } = args;
+                // Try dedicated /v1/tags endpoint first (fast, server-side aggregation)
+                try {
+                    const params = new URLSearchParams();
+                    if (namespace)
+                        params.set('namespace', namespace);
+                    if (agent_id)
+                        params.set('agent_id', agent_id);
+                    const qs = params.toString();
+                    const result = await makeRequest('GET', `/v1/tags${qs ? '?' + qs : ''}`);
+                    if (result.tags) {
+                        const tags = result.tags;
+                        if (tags.length === 0) {
+                            return { content: [{ type: 'text', text: 'No tags found across memories.' }] };
+                        }
+                        const lines = tags.map((t) => typeof t === 'string' ? `  • ${t}` : `  • ${t.tag || t.name}: ${t.count} memories`);
+                        return { content: [{ type: 'text', text: `🏷️ ${tags.length} tags:\n\n${lines.join('\n')}` }] };
+                    }
+                }
+                catch {
+                    // Endpoint not available — fall back to client-side aggregation
+                }
                 const tagCounts = new Map();
                 let offset = 0;
                 const pageSize = 100;
@@ -1522,6 +1545,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case 'memoclaw_namespaces': {
                 const { agent_id } = args;
+                // Try dedicated /v1/namespaces endpoint first (fast, server-side aggregation)
+                try {
+                    const params = new URLSearchParams();
+                    if (agent_id)
+                        params.set('agent_id', agent_id);
+                    const qs = params.toString();
+                    const result = await makeRequest('GET', `/v1/namespaces${qs ? '?' + qs : ''}`);
+                    if (result.namespaces) {
+                        const namespaces = result.namespaces;
+                        if (namespaces.length === 0) {
+                            return { content: [{ type: 'text', text: 'No memories found — no namespaces to list.' }] };
+                        }
+                        const lines = namespaces.map((n) => typeof n === 'string' ? `  • ${n}` : `  • ${n.namespace || n.name || '(default)'}: ${n.count} memories`);
+                        return { content: [{ type: 'text', text: `📁 ${namespaces.length} namespaces:\n\n${lines.join('\n')}` }] };
+                    }
+                }
+                catch {
+                    // Endpoint not available — fall back to client-side aggregation
+                }
                 const nsCounts = new Map();
                 let offset = 0;
                 const pageSize = 100;
