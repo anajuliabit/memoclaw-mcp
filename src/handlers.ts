@@ -116,15 +116,31 @@ export function createHandler(api: ApiClient, config: Config) {
           throw new Error('ids is required and must be a non-empty array');
         }
         if (ids.length > 100) throw new Error('Maximum 100 IDs per bulk delete call');
-        const results = await withConcurrency(
-          ids.map((id: string) => () => makeRequest('DELETE', `/v1/memories/${id}`)),
-          10
-        );
-        const succeeded = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-        const errors = results
-          .map((r, i) => r.status === 'rejected' ? `${ids[i]}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
-          .filter(Boolean);
+
+        // Try dedicated bulk-delete endpoint first, fall back to one-by-one
+        let succeeded = 0;
+        let failed = 0;
+        let errors: string[] = [];
+        try {
+          const result = await makeRequest('POST', '/v1/memories/bulk-delete', { ids });
+          succeeded = result.deleted ?? ids.length;
+          failed = (result.failed && result.failed.length) || 0;
+          if (result.failed && result.failed.length > 0) {
+            errors = result.failed.map((f: any) => `${f.id}: ${f.error || 'unknown error'}`);
+          }
+        } catch {
+          // Fallback: delete one-by-one
+          const results = await withConcurrency(
+            ids.map((id: string) => () => makeRequest('DELETE', `/v1/memories/${id}`)),
+            10
+          );
+          succeeded = results.filter(r => r.status === 'fulfilled').length;
+          failed = results.filter(r => r.status === 'rejected').length;
+          errors = results
+            .map((r, i) => r.status === 'rejected' ? `${ids[i]}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
+            .filter(Boolean) as string[];
+        }
+
         let text = `🗑️ Bulk delete: ${succeeded} succeeded, ${failed} failed`;
         if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
         return { content: [{ type: 'text', text }] };

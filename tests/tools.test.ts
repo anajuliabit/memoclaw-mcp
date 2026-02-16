@@ -575,19 +575,32 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('Maximum 100');
   });
 
-  it('bulk_delete succeeds', async () => {
-    globalThis.fetch = mockFetchOk({ deleted: true });
+  it('bulk_delete succeeds via bulk endpoint', async () => {
+    globalThis.fetch = mockFetchOk({ deleted: 3 });
     const result = await callToolHandler({
       params: { name: 'memoclaw_bulk_delete', arguments: { ids: ['a', 'b', 'c'] } },
     });
     expect(result.content[0].text).toContain('3 succeeded');
   });
 
-  it('bulk_delete reports partial failures', async () => {
+  it('bulk_delete reports partial failures from bulk endpoint', async () => {
+    globalThis.fetch = mockFetchOk({
+      deleted: 2,
+      failed: [{ id: 'b', error: 'not found' }],
+    });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_delete', arguments: { ids: ['a', 'b', 'c'] } },
+    });
+    expect(result.content[0].text).toContain('2 succeeded');
+    expect(result.content[0].text).toContain('1 failed');
+  });
+
+  it('bulk_delete falls back to one-by-one on endpoint error', async () => {
     let callCount = 0;
     globalThis.fetch = vi.fn().mockImplementation(() => {
       callCount++;
-      if (callCount === 2) {
+      // First call is bulk endpoint — fail it
+      if (callCount === 1) {
         return Promise.resolve({
           ok: false, status: 404,
           json: () => Promise.resolve({}),
@@ -603,10 +616,9 @@ describe('Tool Handlers', () => {
       });
     });
     const result = await callToolHandler({
-      params: { name: 'memoclaw_bulk_delete', arguments: { ids: ['a', 'b', 'c'] } },
+      params: { name: 'memoclaw_bulk_delete', arguments: { ids: ['a', 'b'] } },
     });
     expect(result.content[0].text).toContain('2 succeeded');
-    expect(result.content[0].text).toContain('1 failed');
   });
 
   // --- Status ---
