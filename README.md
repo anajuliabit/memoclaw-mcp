@@ -126,7 +126,7 @@ Once configured, your AI agent can:
 
 ## Pricing
 
-Every wallet gets **1000 free API calls** — no payment required.
+**Free Tier:** Every wallet gets **100 free API calls** — no payment required.
 
 After the free tier, x402 micropayments kick in automatically:
 
