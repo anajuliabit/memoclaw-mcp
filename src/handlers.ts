@@ -12,7 +12,7 @@ export function createHandler(api: ApiClient, config: Config) {
   return async function handleToolCall(name: string, args: any): Promise<ToolResult> {
     switch (name) {
       case 'memoclaw_store': {
-        const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned } = args;
+        const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable } = args;
         if (!content || (typeof content === 'string' && content.trim() === '')) {
           throw new Error('content is required and cannot be empty');
         }
@@ -26,6 +26,7 @@ export function createHandler(api: ApiClient, config: Config) {
         if (agent_id) body.agent_id = agent_id;
         if (expires_at) body.expires_at = expires_at;
         if (pinned !== undefined) body.pinned = pinned;
+        if (immutable !== undefined) body.immutable = immutable;
         const result = await makeRequest('POST', '/v1/store', body);
         return { content: [{ type: 'text', text: `✅ Memory stored\n${formatMemory(result.memory || result)}\n\n${JSON.stringify(result, null, 2)}` }] };
       }
@@ -276,6 +277,7 @@ export function createHandler(api: ApiClient, config: Config) {
             if (m.namespace) body.namespace = m.namespace;
             if (m.memory_type) body.memory_type = m.memory_type;
             if (m.pinned !== undefined) body.pinned = m.pinned;
+            if (m.immutable !== undefined) body.immutable = m.immutable;
             if (session_id) body.session_id = session_id;
             if (agent_id) body.agent_id = agent_id;
             return makeRequest('POST', '/v1/store', body);
@@ -304,7 +306,7 @@ export function createHandler(api: ApiClient, config: Config) {
           }
           validateContentLength(m.content, `Memory at index ${i}`);
         }
-        const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at'];
+        const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable'];
         const results = await withConcurrency(
           memories.map((m: any) => () => {
             const body: any = {};

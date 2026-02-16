@@ -15,6 +15,7 @@ export function formatMemory(m: any): string {
   const tags = m.tags || m.metadata?.tags;
   if (tags?.length) parts.push(`  tags: ${tags.join(', ')}`);
   if (m.pinned) parts.push(`  📌 pinned`);
+  if (m.immutable) parts.push(`  🔒 immutable`);
   if (m.expires_at) parts.push(`  expires: ${m.expires_at}`);
   if (m.created_at) parts.push(`  created: ${m.created_at}`);
   if (m.updated_at && m.updated_at !== m.created_at) parts.push(`  updated: ${m.updated_at}`);
@@ -57,5 +58,5 @@ export function validateContentLength(content: string, label = 'content'): void 
 /** Allowed fields for the update endpoint */
 export const UPDATE_FIELDS = new Set([
   'content', 'importance', 'memory_type', 'namespace',
-  'metadata', 'expires_at', 'pinned', 'tags',
+  'metadata', 'expires_at', 'pinned', 'tags', 'immutable',
 ]);
