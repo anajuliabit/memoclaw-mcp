@@ -252,25 +252,41 @@ export function createHandler(api: ApiClient, config: Config) {
 
       case 'memoclaw_export': {
         const { namespace, agent_id, format: fmt } = args;
-        const allMemories: any[] = [];
-        let offset = 0;
-        const pageSize = 100;
-        while (true) {
-          const params = new URLSearchParams();
-          params.set('limit', String(pageSize));
-          params.set('offset', String(offset));
-          if (namespace) params.set('namespace', namespace);
-          if (agent_id) params.set('agent_id', agent_id);
-          const result = await makeRequest('GET', `/v1/memories?${params}`);
-          const memories = result.memories || result.data || [];
-          allMemories.push(...memories);
-          if (memories.length < pageSize) break;
-          offset += pageSize;
+        const params = new URLSearchParams();
+        if (namespace) params.set('namespace', namespace);
+        if (agent_id) params.set('agent_id', agent_id);
+        if (fmt) params.set('format', fmt);
+        const query = params.toString();
+        try {
+          const result = await makeRequest('GET', `/v1/export${query ? `?${query}` : ''}`);
+          const memories = result.memories || result.data || result;
+          const list = Array.isArray(memories) ? memories : [];
+          const output = fmt === 'jsonl'
+            ? list.map((m: any) => JSON.stringify(m)).join('\n')
+            : JSON.stringify(list, null, 2);
+          return { content: [{ type: 'text', text: `📦 Exported ${list.length} memories\n\n${output}` }] };
+        } catch {
+          // Fallback: paginate through /v1/memories if /v1/export is unavailable
+          const allMemories: any[] = [];
+          let offset = 0;
+          const pageSize = 100;
+          while (true) {
+            const fallbackParams = new URLSearchParams();
+            fallbackParams.set('limit', String(pageSize));
+            fallbackParams.set('offset', String(offset));
+            if (namespace) fallbackParams.set('namespace', namespace);
+            if (agent_id) fallbackParams.set('agent_id', agent_id);
+            const result = await makeRequest('GET', `/v1/memories?${fallbackParams}`);
+            const memories = result.memories || result.data || [];
+            allMemories.push(...memories);
+            if (memories.length < pageSize) break;
+            offset += pageSize;
+          }
+          const output = fmt === 'jsonl'
+            ? allMemories.map((m: any) => JSON.stringify(m)).join('\n')
+            : JSON.stringify(allMemories, null, 2);
+          return { content: [{ type: 'text', text: `📦 Exported ${allMemories.length} memories\n\n${output}` }] };
         }
-        const output = fmt === 'jsonl'
-          ? allMemories.map(m => JSON.stringify(m)).join('\n')
-          : JSON.stringify(allMemories, null, 2);
-        return { content: [{ type: 'text', text: `📦 Exported ${allMemories.length} memories\n\n${output}` }] };
       }
 
       case 'memoclaw_import': {

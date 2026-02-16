@@ -824,11 +824,32 @@ describe('Tool Handlers', () => {
 
   // --- Export ---
 
-  it('export paginates and returns all memories', async () => {
+  it('export uses /v1/export endpoint', async () => {
+    const memories = Array.from({ length: 150 }, (_, i) => ({ id: `m${i}`, content: `memory ${i}` }));
+    globalThis.fetch = mockFetchOk({ memories });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_export', arguments: {} },
+    });
+    expect(result.content[0].text).toContain('Exported 150 memories');
+    const url = (globalThis.fetch as any).mock.calls[0][0];
+    expect(url).toContain('/v1/export');
+  });
+
+  it('export falls back to pagination when /v1/export fails', async () => {
     let callNum = 0;
-    globalThis.fetch = vi.fn().mockImplementation(() => {
+    globalThis.fetch = vi.fn().mockImplementation((_url: string) => {
       callNum++;
-      const count = callNum === 1 ? 100 : 50;
+      if (callNum === 1) {
+        // /v1/export fails
+        return Promise.resolve({
+          ok: false, status: 404,
+          json: () => Promise.resolve({ error: 'not found' }),
+          text: () => Promise.resolve('not found'),
+          headers: new Headers(),
+        });
+      }
+      // Fallback pagination calls
+      const count = callNum === 2 ? 100 : 50;
       const memories = Array.from({ length: count }, (_, i) => ({ id: `m${i}`, content: `memory ${i}` }));
       return Promise.resolve({
         ok: true, status: 200,
