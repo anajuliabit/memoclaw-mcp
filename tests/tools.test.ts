@@ -121,6 +121,13 @@ describe('Tool Definitions', () => {
     expect(tool.inputSchema.required).toContain('content');
   });
 
+  it('store tool has immutable property', async () => {
+    const result = await listToolsHandler();
+    const tool = result.tools.find((t: any) => t.name === 'memoclaw_store');
+    expect(tool.inputSchema.properties.immutable).toBeDefined();
+    expect(tool.inputSchema.properties.immutable.type).toBe('boolean');
+  });
+
   it('recall requires query', async () => {
     const result = await listToolsHandler();
     const tool = result.tools.find((t: any) => t.name === 'memoclaw_recall');
@@ -337,6 +344,25 @@ describe('Tool Handlers', () => {
     });
     const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
     expect(body.pinned).toBe(false);
+  });
+
+  it('store sends immutable=true correctly', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test', immutable: true } });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: 'test', immutable: true } },
+    });
+    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    expect(body.immutable).toBe(true);
+    expect(result.content[0].text).toContain('🔒 immutable');
+  });
+
+  it('store does not send immutable when not provided', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+    await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: 'test' } },
+    });
+    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    expect(body.immutable).toBeUndefined();
   });
 
   // --- Recall ---
@@ -676,6 +702,15 @@ describe('Tool Handlers', () => {
     });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('No valid update fields');
+  });
+
+  it('update sends immutable field', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '123', content: 'locked', immutable: true } });
+    await callToolHandler({
+      params: { name: 'memoclaw_update', arguments: { id: '123', immutable: true } },
+    });
+    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    expect(body.immutable).toBe(true);
   });
 
   it('update without id returns error', async () => {
