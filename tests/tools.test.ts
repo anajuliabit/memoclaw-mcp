@@ -1593,6 +1593,14 @@ describe('memoclaw_batch_update', () => {
     expect(result.content[0].text).toContain('missing "id"');
   });
 
+  it('rejects importance out of range in updates', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_batch_update', arguments: { updates: [{ id: 'm1', importance: 5 }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('between 0.0 and 1.0');
+  });
+
   it('rejects more than 50 updates', async () => {
     const updates = Array.from({ length: 51 }, (_, i) => ({ id: `m${i}`, importance: 0.5 }));
     const result = await callToolHandler({
