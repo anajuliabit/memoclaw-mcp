@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vite
 process.env.MEMOCLAW_PRIVATE_KEY =
   '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
 process.env.MEMOCLAW_URL = 'https://test.memoclaw.com';
+process.env.MEMOCLAW_TIMEOUT = '5000';
+process.env.MEMOCLAW_MAX_RETRIES = '0';
 
 // Mock MCP SDK
 const mockSetRequestHandler = vi.fn();

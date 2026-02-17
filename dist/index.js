@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'node:http';
 import { loadConfig } from './config.js';
 import { createApiClient } from './api.js';
 import { TOOLS } from './tools.js';
 import { createHandler } from './handlers.js';
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let VERSION = '1.13.0';
+let VERSION = '1.14.0';
 try {
     const pkg = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
     VERSION = pkg.version;
@@ -39,10 +41,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
 });
+/**
+ * Determine transport mode from CLI args and env vars.
+ * --http or MEMOCLAW_TRANSPORT=http → Streamable HTTP
+ * Otherwise → stdio (default, backward-compatible)
+ */
+function getTransportMode() {
+    if (process.argv.includes('--http'))
+        return 'http';
+    if (process.env.MEMOCLAW_TRANSPORT?.toLowerCase() === 'http')
+        return 'http';
+    return 'stdio';
+}
+/** Default port for HTTP transport */
+function getHttpPort() {
+    const envPort = process.env.MEMOCLAW_PORT || process.env.PORT;
+    if (envPort) {
+        const parsed = parseInt(envPort, 10);
+        if (!isNaN(parsed) && parsed > 0 && parsed < 65536)
+            return parsed;
+    }
+    return 3100;
+}
 // Start server
 async function main() {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error('MemoClaw MCP server running (free tier enabled)');
+    const mode = getTransportMode();
+    if (mode === 'http') {
+        const port = getHttpPort();
+        const httpServer = createServer(async (req, res) => {
+            const url = new URL(req.url || '/', `http://localhost:${port}`);
+            // Health check endpoint
+            if (url.pathname === '/health' && req.method === 'GET') {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: 'ok', version: VERSION }));
+                return;
+            }
+            // MCP endpoint
+            if (url.pathname === '/mcp') {
+                const transport = new StreamableHTTPServerTransport({
+                    sessionIdGenerator: undefined,
+                });
+                await server.connect(transport);
+                await transport.handleRequest(req, res);
+                return;
+            }
+            // 404 for everything else
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Not found. Use /mcp for MCP protocol or /health for status.' }));
+        });
+        httpServer.listen(port, () => {
+            console.error(`MemoClaw MCP server running on http://localhost:${port}/mcp (Streamable HTTP)`);
+        });
+    }
+    else {
+        const transport = new StdioServerTransport();
+        await server.connect(transport);
+        console.error('MemoClaw MCP server running (free tier enabled)');
+    }
 }
 main().catch(console.error);

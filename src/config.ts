@@ -6,6 +6,10 @@ export interface Config {
   privateKey: string;
   apiUrl: string;
   configSource: string;
+  /** Request timeout in milliseconds (default: 30000) */
+  timeout: number;
+  /** Max retries for transient failures (default: 3) */
+  maxRetries: number;
 }
 
 /**
@@ -44,5 +48,10 @@ export function loadConfig(): Config {
     process.exit(1);
   }
 
-  return { privateKey, apiUrl, configSource };
+  const parsedTimeout = parseInt(process.env.MEMOCLAW_TIMEOUT || '', 10);
+  const timeout = Number.isNaN(parsedTimeout) ? 30_000 : parsedTimeout;
+  const parsedRetries = parseInt(process.env.MEMOCLAW_MAX_RETRIES || '', 10);
+  const maxRetries = Number.isNaN(parsedRetries) ? 3 : parsedRetries;
+
+  return { privateKey, apiUrl, configSource, timeout, maxRetries };
 }
