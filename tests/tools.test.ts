@@ -339,6 +339,38 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('Memory stored');
   });
 
+  it('store rejects importance > 1', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: 'test', importance: 1.5 } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('between 0.0 and 1.0');
+  });
+
+  it('store rejects importance < 0', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: 'test', importance: -0.1 } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('between 0.0 and 1.0');
+  });
+
+  it('store accepts importance=0 (boundary)', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test', importance: 0 } });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: 'test', importance: 0 } },
+    });
+    expect(result.isError).toBeUndefined();
+  });
+
+  it('store accepts importance=1 (boundary)', async () => {
+    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test', importance: 1 } });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_store', arguments: { content: 'test', importance: 1 } },
+    });
+    expect(result.isError).toBeUndefined();
+  });
+
   it('store sends pinned=false correctly', async () => {
     globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
     await callToolHandler({
@@ -710,6 +742,14 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('8192 character limit');
   });
 
+  it('update rejects importance > 1', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_update', arguments: { id: '123', importance: 2.0 } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('between 0.0 and 1.0');
+  });
+
   it('update rejects unknown fields', async () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_update', arguments: { id: '123', unknown_field: 'bad' } },
@@ -902,6 +942,14 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('8192 character limit');
   });
 
+  it('import rejects importance out of range', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_import', arguments: { memories: [{ content: 'ok', importance: -1 }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('between 0.0 and 1.0');
+  });
+
   it('import validates each memory has content', async () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_import', arguments: { memories: [{ content: 'ok' }, { content: '' }] } },
@@ -955,6 +1003,14 @@ describe('Tool Handlers', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('index 1');
     expect(result.content[0].text).toContain('8192 character limit');
+  });
+
+  it('bulk_store rejects importance out of range', async () => {
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'ok', importance: 1.5 }] } },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('between 0.0 and 1.0');
   });
 
   it('bulk_store validates each memory has content', async () => {
