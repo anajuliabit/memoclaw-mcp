@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import type { ApiClient } from './api.js';
 import type { Config } from './config.js';
-import { formatMemory, withConcurrency, validateContentLength, UPDATE_FIELDS } from './format.js';
+import { formatMemory, withConcurrency, validateContentLength, validateImportance, UPDATE_FIELDS } from './format.js';
 
 type ToolResult = { content: Array<{ type: string; text: string }>; isError?: boolean };
 
@@ -17,6 +17,7 @@ export function createHandler(api: ApiClient, config: Config) {
           throw new Error('content is required and cannot be empty');
         }
         validateContentLength(content);
+        validateImportance(importance);
         const body: any = { content };
         if (importance !== undefined) body.importance = importance;
         if (tags) body.tags = tags;
@@ -214,6 +215,7 @@ export function createHandler(api: ApiClient, config: Config) {
           throw new Error('No valid update fields provided. Allowed: ' + [...UPDATE_FIELDS].join(', '));
         }
         if (typeof updateFields.content === 'string') validateContentLength(updateFields.content);
+        validateImportance(updateFields.importance);
         const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
         return { content: [{ type: 'text', text: `✅ Memory ${id} updated\n${formatMemory(result.memory || result)}\n\n${JSON.stringify(result, null, 2)}` }] };
       }
@@ -300,6 +302,7 @@ export function createHandler(api: ApiClient, config: Config) {
             throw new Error(`Memory at index ${i} has empty content`);
           }
           validateContentLength(m.content, `Memory at index ${i}`);
+          validateImportance(m.importance, `Memory at index ${i} importance`);
         }
         const results = await withConcurrency(
           memories.map((m: any) => () => {
@@ -337,6 +340,7 @@ export function createHandler(api: ApiClient, config: Config) {
             throw new Error(`Memory at index ${i} has empty content`);
           }
           validateContentLength(m.content, `Memory at index ${i}`);
+          validateImportance(m.importance, `Memory at index ${i} importance`);
         }
         const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable'];
         const results = await withConcurrency(
@@ -753,6 +757,7 @@ export function createHandler(api: ApiClient, config: Config) {
         if (updates.length > 50) throw new Error('Maximum 50 updates per batch update call');
         for (const [i, u] of updates.entries()) {
           if (!u.id) throw new Error(`Update at index ${i} is missing "id"`);
+          validateImportance(u.importance, `Update at index ${i} importance`);
         }
         try {
           const result = await makeRequest('POST', '/v1/memories/batch-update', { updates });

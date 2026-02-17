@@ -43,6 +43,19 @@ export async function withConcurrency<T>(tasks: (() => Promise<T>)[], limit: num
   return results;
 }
 
+/**
+ * Validate importance score is within the allowed range [0, 1].
+ */
+export function validateImportance(value: unknown, label = 'importance'): void {
+  if (value === undefined || value === null) return;
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    throw new Error(`${label} must be a number between 0.0 and 1.0`);
+  }
+  if (value < 0 || value > 1) {
+    throw new Error(`${label} must be between 0.0 and 1.0 (got ${value})`);
+  }
+}
+
 /** Maximum content length per memory (server enforces 8192 chars) */
 export const MAX_CONTENT_LENGTH = 8192;
 
