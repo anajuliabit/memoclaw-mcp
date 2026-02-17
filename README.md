@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/memoclaw-mcp)](https://www.npmjs.com/package/memoclaw-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-MCP (Model Context Protocol) server for [MemoClaw](https://memoclaw.com) — semantic memory for AI agents. Store, recall, and manage memories with vector search. 1000 free API calls per wallet, no registration needed.
+MCP (Model Context Protocol) server for [MemoClaw](https://memoclaw.com) — semantic memory for AI agents. Store, recall, and manage memories with vector search. 100 free API calls per wallet, no registration needed.
 
 ## Installation
 
@@ -49,6 +49,27 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ### Cursor
 
 Add to MCP settings in Cursor preferences.
+
+### Streamable HTTP Transport
+
+By default, the server uses stdio transport. To run as an HTTP server (MCP spec 2025-03-26 Streamable HTTP):
+
+```bash
+# Via CLI flag
+memoclaw-mcp --http
+
+# Via environment variable
+MEMOCLAW_TRANSPORT=http memoclaw-mcp
+
+# Custom port (default: 3100)
+MEMOCLAW_PORT=8080 memoclaw-mcp --http
+```
+
+The server exposes:
+- `POST /mcp` — MCP Streamable HTTP endpoint
+- `GET /health` — Health check returning `{ status: "ok", version: "..." }`
+
+Configure your MCP client to connect to `http://localhost:3100/mcp`.
 
 ## Tools
 
