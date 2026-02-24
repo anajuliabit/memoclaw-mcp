@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { loadConfig } from './config.js';
 import { createApiClient } from './api.js';
 import { TOOLS } from './tools.js';
@@ -68,6 +69,8 @@ async function main() {
     const mode = getTransportMode();
     if (mode === 'http') {
         const port = getHttpPort();
+        // Session store: map session IDs to their transports
+        const sessions = new Map();
         const httpServer = createServer(async (req, res) => {
             const url = new URL(req.url || '/', `http://localhost:${port}`);
             // Health check endpoint
@@ -78,11 +81,50 @@ async function main() {
             }
             // MCP endpoint
             if (url.pathname === '/mcp') {
+                // Extract session ID from header for existing sessions
+                const sessionId = req.headers['mcp-session-id'];
+                if (req.method === 'DELETE') {
+                    // Session cleanup
+                    if (sessionId && sessions.has(sessionId)) {
+                        const transport = sessions.get(sessionId);
+                        await transport.handleRequest(req, res);
+                        sessions.delete(sessionId);
+                    }
+                    else {
+                        res.writeHead(404, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Session not found' }));
+                    }
+                    return;
+                }
+                // For GET (SSE) and POST, route to existing session or create new one
+                if (sessionId && sessions.has(sessionId)) {
+                    // Route to existing session transport
+                    const transport = sessions.get(sessionId);
+                    await transport.handleRequest(req, res);
+                    return;
+                }
+                if (req.method === 'GET') {
+                    // GET without valid session → error (SSE needs an existing session)
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Invalid or missing session ID. Send a POST first to initialize.' }));
+                    return;
+                }
+                // POST without session ID → new session (initialization)
                 const transport = new StreamableHTTPServerTransport({
-                    sessionIdGenerator: undefined,
+                    sessionIdGenerator: () => randomUUID(),
                 });
+                // When the transport assigns a session ID, store it
+                transport.onclose = () => {
+                    if (transport.sessionId) {
+                        sessions.delete(transport.sessionId);
+                    }
+                };
                 await server.connect(transport);
+                // Store the session after connect so sessionId is available after first response
                 await transport.handleRequest(req, res);
+                if (transport.sessionId) {
+                    sessions.set(transport.sessionId, transport);
+                }
                 return;
             }
             // 404 for everything else
