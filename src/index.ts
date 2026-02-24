@@ -5,6 +5,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -16,6 +18,7 @@ import { loadConfig } from './config.js';
 import { createApiClient } from './api.js';
 import { TOOLS } from './tools.js';
 import { createHandler } from './handlers.js';
+import { RESOURCES, createResourceHandler } from './resources.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,14 +33,29 @@ try {
 const config = loadConfig();
 const api = createApiClient(config);
 const handleToolCall = createHandler(api, config);
+const handleReadResource = createResourceHandler(api, config);
 
 const server = new Server(
   { name: 'memoclaw', version: VERSION },
-  { capabilities: { tools: {} } }
+  { capabilities: { tools: {}, resources: {} } }
 );
 
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+
+// List available resources
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+
+// Read a resource
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+  try {
+    return await handleReadResource(uri);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Resource read failed: ${msg}`);
+  }
+});
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
