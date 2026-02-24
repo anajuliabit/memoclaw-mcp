@@ -7,6 +7,8 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -19,6 +21,7 @@ import { createApiClient } from './api.js';
 import { TOOLS } from './tools.js';
 import { createHandler } from './handlers.js';
 import { RESOURCES, createResourceHandler } from './resources.js';
+import { PROMPTS, createPromptHandler } from './prompts.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,10 +37,11 @@ const config = loadConfig();
 const api = createApiClient(config);
 const handleToolCall = createHandler(api, config);
 const handleReadResource = createResourceHandler(api, config);
+const handleGetPrompt = createPromptHandler(api, config);
 
 const server = new Server(
   { name: 'memoclaw', version: VERSION },
-  { capabilities: { tools: {}, resources: {} } }
+  { capabilities: { tools: {}, resources: {}, prompts: {} } }
 );
 
 // List available tools
@@ -54,6 +58,20 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     throw new Error(`Resource read failed: ${msg}`);
+  }
+});
+
+// List available prompts
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: PROMPTS }));
+
+// Get a prompt
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+  try {
+    return await handleGetPrompt(name, args);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Prompt failed: ${msg}`);
   }
 });
 

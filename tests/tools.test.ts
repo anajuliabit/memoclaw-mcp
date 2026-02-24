@@ -30,6 +30,8 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
   CallToolRequestSchema: 'CallToolRequestSchema',
   ListResourcesRequestSchema: 'ListResourcesRequestSchema',
   ReadResourceRequestSchema: 'ReadResourceRequestSchema',
+  ListPromptsRequestSchema: 'ListPromptsRequestSchema',
+  GetPromptRequestSchema: 'GetPromptRequestSchema',
 }));
 
 vi.mock('@x402/core/client', () => ({
@@ -83,7 +85,7 @@ function mockFetchError(status: number, text: string) {
 
 describe('Tool Definitions', () => {
   it('registers both handlers', () => {
-    expect(mockSetRequestHandler).toHaveBeenCalledTimes(4);
+    expect(mockSetRequestHandler).toHaveBeenCalledTimes(6);
   });
 
   it('exposes all expected tools', async () => {
