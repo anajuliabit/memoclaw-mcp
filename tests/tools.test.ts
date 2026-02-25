@@ -114,6 +114,40 @@ describe('Tool Definitions', () => {
     expect(result.tools).toHaveLength(33);
   });
 
+  it('every tool has annotations with all required hints', async () => {
+    const result = await listToolsHandler();
+    for (const tool of result.tools) {
+      expect(tool.annotations, `${tool.name} missing annotations`).toBeDefined();
+      expect(typeof tool.annotations.title).toBe('string');
+      expect(typeof tool.annotations.readOnlyHint).toBe('boolean');
+      expect(typeof tool.annotations.destructiveHint).toBe('boolean');
+      expect(typeof tool.annotations.idempotentHint).toBe('boolean');
+      expect(typeof tool.annotations.openWorldHint).toBe('boolean');
+    }
+  });
+
+  it('read-only tools are marked readOnlyHint=true', async () => {
+    const result = await listToolsHandler();
+    const readOnlyTools = ['memoclaw_recall', 'memoclaw_search', 'memoclaw_get', 'memoclaw_list',
+      'memoclaw_status', 'memoclaw_suggested', 'memoclaw_list_relations', 'memoclaw_export',
+      'memoclaw_count', 'memoclaw_init', 'memoclaw_graph', 'memoclaw_tags', 'memoclaw_history',
+      'memoclaw_namespaces', 'memoclaw_context', 'memoclaw_core_memories', 'memoclaw_stats'];
+    for (const name of readOnlyTools) {
+      const tool = result.tools.find((t: any) => t.name === name);
+      expect(tool?.annotations?.readOnlyHint, `${name} should be readOnly`).toBe(true);
+    }
+  });
+
+  it('destructive tools are marked destructiveHint=true', async () => {
+    const result = await listToolsHandler();
+    const destructiveTools = ['memoclaw_delete', 'memoclaw_bulk_delete',
+      'memoclaw_delete_relation', 'memoclaw_delete_namespace', 'memoclaw_consolidate'];
+    for (const name of destructiveTools) {
+      const tool = result.tools.find((t: any) => t.name === name);
+      expect(tool?.annotations?.destructiveHint, `${name} should be destructive`).toBe(true);
+    }
+  });
+
   it('delete_namespace requires namespace', async () => {
     const result = await listToolsHandler();
     const tool = result.tools.find((t: any) => t.name === 'memoclaw_delete_namespace');
