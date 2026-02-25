@@ -1,6 +1,12 @@
 /**
  * MCP tool definitions for MemoClaw.
  * Each tool maps to an API endpoint or composite operation.
+ *
+ * Annotations follow the MCP spec (2025-03-26+):
+ *   readOnlyHint  — true if the tool does not modify server-side state
+ *   destructiveHint — true if the tool may permanently delete data
+ *   idempotentHint — true if calling multiple times with the same args has no extra effect
+ *   openWorldHint — true if the tool interacts with external entities beyond MemoClaw
  */
 
 const MEMORY_TYPE_ENUM = ['correction', 'preference', 'decision', 'project', 'observation', 'general'] as const;
@@ -22,6 +28,13 @@ export const TOOLS = [
       'Use tags and namespace to organize memories. Set importance (0-1) to influence recall ranking. ' +
       'Use memory_type to control how the memory decays over time. Pin important memories to prevent decay. ' +
       'Returns the created memory object with its ID. Free tier: 100 calls/wallet.',
+    annotations: {
+      title: 'Store memory',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -47,6 +60,13 @@ export const TOOLS = [
       'Returns results ranked by similarity score (0-1). Use min_similarity=0.3+ to filter low-quality matches. ' +
       'Set include_relations=true to also fetch related memories via the knowledge graph. ' +
       '💡 TIP: If you know the memory ID, use memoclaw_get (faster). For exact keyword matching, use memoclaw_search.',
+    annotations: {
+      title: 'Semantic recall',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -65,6 +85,13 @@ export const TOOLS = [
       '🔎 KEYWORD SEARCH: Find memories containing exact keywords or phrases. ' +
       'Unlike memoclaw_recall (semantic search), this does exact string matching. ' +
       'For finding similar meanings, use memoclaw_recall instead.',
+    annotations: {
+      title: 'Keyword search',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -79,6 +106,13 @@ export const TOOLS = [
     name: 'memoclaw_get',
     description:
       'Retrieve a single memory by its exact ID. Use this when you already know the memory ID.',
+    annotations: {
+      title: 'Get memory',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -93,6 +127,13 @@ export const TOOLS = [
       '📋 LIST: Browse all memories chronologically (newest first). ' +
       'Supports filtering by tags, namespace, memory_type, session_id, agent_id. ' +
       '💡 TIP: For semantic search, use memoclaw_recall. For keywords, use memoclaw_search.',
+    annotations: {
+      title: 'List memories',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -105,6 +146,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_delete',
     description: 'Permanently delete a single memory by its ID. This cannot be undone.',
+    annotations: {
+      title: 'Delete memory',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -116,6 +164,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_bulk_delete',
     description: 'Delete multiple memories at once by their IDs. Max 100 IDs per call.',
+    annotations: {
+      title: 'Bulk delete memories',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -129,6 +184,13 @@ export const TOOLS = [
     description:
       'Update an existing memory by its ID. Only provided fields are changed. ' +
       'If you update content, the semantic embedding is automatically regenerated.',
+    annotations: {
+      title: 'Update memory',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -149,6 +211,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_status',
     description: 'Check your wallet\'s free tier usage. Shows remaining API calls out of 100.',
+    annotations: {
+      title: 'Free tier status',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: { type: 'object' as const, properties: {} },
   },
   {
@@ -156,6 +225,13 @@ export const TOOLS = [
     description:
       'Bulk-ingest a conversation or raw text. The server extracts facts, deduplicates, ' +
       'and optionally creates relations. Provide either messages OR text, not both.',
+    annotations: {
+      title: 'Ingest conversation',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -173,6 +249,13 @@ export const TOOLS = [
     description:
       'Extract structured facts from a conversation via LLM, without auto-relating them. ' +
       'Use this when you want to review extracted facts before relating them.',
+    annotations: {
+      title: 'Extract facts',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -188,6 +271,13 @@ export const TOOLS = [
     name: 'memoclaw_consolidate',
     description:
       'Merge similar/duplicate memories by clustering. Use dry_run=true first to preview.',
+    annotations: {
+      title: 'Consolidate memories',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -202,6 +292,13 @@ export const TOOLS = [
     name: 'memoclaw_suggested',
     description:
       'Get proactive memory suggestions: stale, fresh, hot, or decaying memories.',
+    annotations: {
+      title: 'Suggested memories',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -217,6 +314,13 @@ export const TOOLS = [
     name: 'memoclaw_create_relation',
     description:
       'Create a directed relationship between two memories for the knowledge graph.',
+    annotations: {
+      title: 'Create relation',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -231,6 +335,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_list_relations',
     description: 'List all relationships for a specific memory (incoming and outgoing).',
+    annotations: {
+      title: 'List relations',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -242,6 +353,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_delete_relation',
     description: 'Delete a specific relationship between memories.',
+    annotations: {
+      title: 'Delete relation',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -254,6 +372,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_export',
     description: 'Export all memories as JSON. Useful for backup, migration, or analysis.',
+    annotations: {
+      title: 'Export memories',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -267,6 +392,13 @@ export const TOOLS = [
     name: 'memoclaw_import',
     description:
       'Import memories from a JSON array. Each object must have a "content" field. Max 100 per call.',
+    annotations: {
+      title: 'Import memories',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -298,6 +430,13 @@ export const TOOLS = [
     description:
       'Store multiple memories in a single call. Max 50 per call. ' +
       'Each memory can have its own tags, namespace, importance, etc.',
+    annotations: {
+      title: 'Bulk store memories',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -327,6 +466,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_count',
     description: 'Get a count of memories, optionally filtered. Faster than memoclaw_list when you only need the total.',
+    annotations: {
+      title: 'Count memories',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -342,6 +488,13 @@ export const TOOLS = [
     description:
       'Delete ALL memories in a namespace. Destructive and cannot be undone. ' +
       'Use memoclaw_count first to check how many will be affected.',
+    annotations: {
+      title: 'Delete namespace',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -356,6 +509,13 @@ export const TOOLS = [
     description:
       'Check if MemoClaw is properly configured. Returns config status, wallet address, and free tier remaining. ' +
       'Call this FIRST to verify the connection works.',
+    annotations: {
+      title: 'Check configuration',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: { type: 'object' as const, properties: {} },
   },
   {
@@ -364,6 +524,13 @@ export const TOOLS = [
       'Migrate local markdown memory files into MemoClaw. ' +
       'Accepts EITHER a directory/file path OR an array of file objects. ' +
       'Supports .md and .txt files. Recursively scans directories.',
+    annotations: {
+      title: 'Migrate files',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -391,6 +558,13 @@ export const TOOLS = [
     name: 'memoclaw_graph',
     description:
       'Traverse the memory graph from a starting memory up to a specified depth.',
+    annotations: {
+      title: 'Traverse graph',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -404,6 +578,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_pin',
     description: '📌 Pin a memory to prevent decay. Shortcut for memoclaw_update with pinned=true.',
+    annotations: {
+      title: 'Pin memory',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: { id: { type: 'string', description: 'The memory ID to pin.' } },
@@ -413,6 +594,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_unpin',
     description: '📌 Unpin a memory, re-enabling decay. Shortcut for memoclaw_update with pinned=false.',
+    annotations: {
+      title: 'Unpin memory',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: { id: { type: 'string', description: 'The memory ID to unpin.' } },
@@ -422,6 +610,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_tags',
     description: '🏷️ List all unique tags with counts. Sorted by usage (most used first).',
+    annotations: {
+      title: 'List tags',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -433,6 +628,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_history',
     description: '📜 View the edit history of a specific memory.',
+    annotations: {
+      title: 'Memory history',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: { id: { type: 'string', description: 'The memory ID to view history for.' } },
@@ -442,6 +644,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_namespaces',
     description: 'List all namespaces that contain memories with counts.',
+    annotations: {
+      title: 'List namespaces',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: { agent_id: { type: 'string', description: 'Only list namespaces for this agent.' } },
@@ -452,6 +661,13 @@ export const TOOLS = [
     description:
       '🧠 CONTEXT: Get contextually relevant memories using GPT-4o-mini analysis. ' +
       'Costs $0.01 per call.',
+    annotations: {
+      title: 'Get context',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -467,6 +683,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_batch_update',
     description: 'Update multiple memories in a single call. Max 50 updates. Costs $0.005 per call.',
+    annotations: {
+      title: 'Batch update memories',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -497,6 +720,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_core_memories',
     description: '⭐ Get your most important memories — high importance, frequently accessed, or pinned. FREE.',
+    annotations: {
+      title: 'Core memories',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -509,6 +739,13 @@ export const TOOLS = [
   {
     name: 'memoclaw_stats',
     description: '📊 Get memory usage statistics. FREE.',
+    annotations: {
+      title: 'Memory statistics',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: { type: 'object' as const, properties: {} },
   },
 ];
