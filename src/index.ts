@@ -6,6 +6,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
@@ -20,7 +21,7 @@ import { loadConfig } from './config.js';
 import { createApiClient } from './api.js';
 import { TOOLS } from './tools.js';
 import { createHandler } from './handlers.js';
-import { RESOURCES, createResourceHandler } from './resources.js';
+import { RESOURCES, RESOURCE_TEMPLATES, createResourceHandler } from './resources.js';
 import { PROMPTS, createPromptHandler } from './prompts.js';
 
 // Read version from package.json to avoid duplication
@@ -49,6 +50,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
 
 // List available resources
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+
+// List resource templates
+server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: RESOURCE_TEMPLATES }));
 
 // Read a resource
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
