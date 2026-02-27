@@ -1,10 +1,15 @@
 /**
  * MCP Resource definitions and handler for MemoClaw.
  *
- * Exposes read-only data as MCP Resources:
+ * Static resources (resources/list):
  * - memoclaw://stats        — Memory usage statistics
  * - memoclaw://namespaces   — List of namespaces with counts
  * - memoclaw://core-memories — Most important/pinned/frequently accessed memories
+ *
+ * Resource templates (resources/templates/list):
+ * - memoclaw://memories/{id}           — Read a single memory by ID
+ * - memoclaw://namespaces/{namespace}  — List memories in a namespace
+ * - memoclaw://tags/{tag}              — List memories with a specific tag
  */
 
 import type { ApiClient } from './api.js';
@@ -36,10 +41,62 @@ export const RESOURCES = [
   },
 ];
 
+/** Resource templates returned by resources/templates/list */
+export const RESOURCE_TEMPLATES = [
+  {
+    uriTemplate: 'memoclaw://memories/{id}',
+    name: 'Memory by ID',
+    description:
+      'Read a single memory by its ID. Returns the full memory object including content, tags, importance, and metadata. FREE.',
+    mimeType: 'application/json',
+  },
+  {
+    uriTemplate: 'memoclaw://namespaces/{namespace}',
+    name: 'Namespace Memories',
+    description:
+      'List all memories in a specific namespace. Returns up to 50 memories sorted by creation date (newest first). FREE.',
+    mimeType: 'application/json',
+  },
+  {
+    uriTemplate: 'memoclaw://tags/{tag}',
+    name: 'Memories by Tag',
+    description:
+      'List all memories with a specific tag. Returns up to 50 memories sorted by creation date (newest first). FREE.',
+    mimeType: 'application/json',
+  },
+];
+
+/**
+ * Parse a memoclaw:// URI and extract template parameters.
+ * Returns null if the URI doesn't match any template.
+ */
+function parseTemplateUri(uri: string): { template: string; params: Record<string, string> } | null {
+  // memoclaw://memories/{id}
+  const memoryMatch = uri.match(/^memoclaw:\/\/memories\/(.+)$/);
+  if (memoryMatch) {
+    return { template: 'memories', params: { id: decodeURIComponent(memoryMatch[1]) } };
+  }
+
+  // memoclaw://namespaces/{namespace} (but not the bare memoclaw://namespaces)
+  const nsMatch = uri.match(/^memoclaw:\/\/namespaces\/(.+)$/);
+  if (nsMatch) {
+    return { template: 'namespaces', params: { namespace: decodeURIComponent(nsMatch[1]) } };
+  }
+
+  // memoclaw://tags/{tag}
+  const tagMatch = uri.match(/^memoclaw:\/\/tags\/(.+)$/);
+  if (tagMatch) {
+    return { template: 'tags', params: { tag: decodeURIComponent(tagMatch[1]) } };
+  }
+
+  return null;
+}
+
 export function createResourceHandler(api: ApiClient, _config: Config) {
   const { makeRequest } = api;
 
   return async function handleReadResource(uri: string) {
+    // Check static resources first
     switch (uri) {
       case 'memoclaw://stats': {
         const result = await makeRequest('GET', '/v1/stats');
@@ -107,9 +164,59 @@ export function createResourceHandler(api: ApiClient, _config: Config) {
           ],
         };
       }
-
-      default:
-        throw new Error(`Unknown resource: ${uri}`);
     }
+
+    // Check resource templates
+    const parsed = parseTemplateUri(uri);
+    if (parsed) {
+      switch (parsed.template) {
+        case 'memories': {
+          const result = await makeRequest('GET', `/v1/memories/${encodeURIComponent(parsed.params.id)}`);
+          const memory = result.memory || result;
+          return {
+            contents: [
+              {
+                uri,
+                mimeType: 'application/json',
+                text: JSON.stringify(memory, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'namespaces': {
+          const params = new URLSearchParams();
+          params.set('namespace', parsed.params.namespace);
+          params.set('limit', '50');
+          const result = await makeRequest('GET', `/v1/memories?${params}`);
+          const memories = result.memories || result.data || [];
+          return {
+            contents: [
+              {
+                uri,
+                mimeType: 'application/json',
+                text: JSON.stringify({ namespace: parsed.params.namespace, memories, count: memories.length }, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'tags': {
+          const result = await makeRequest('GET', `/v1/memories?tags=${encodeURIComponent(parsed.params.tag)}&limit=50`);
+          const memories = result.memories || result.data || [];
+          return {
+            contents: [
+              {
+                uri,
+                mimeType: 'application/json',
+                text: JSON.stringify({ tag: parsed.params.tag, memories, count: memories.length }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+    }
+
+    throw new Error(`Unknown resource: ${uri}`);
   };
 }
