@@ -101,14 +101,39 @@ async function main() {
     const mode = getTransportMode();
     if (mode === 'http') {
         const port = getHttpPort();
-        // Session store: map session IDs to their transports
+        // Session store: map session IDs to their transports + last activity time
         const sessions = new Map();
+        const sessionActivity = new Map();
+        /** Session idle TTL in ms (default 30 min, configurable via MEMOCLAW_SESSION_TTL_MS) */
+        const SESSION_TTL_MS = parseInt(process.env.MEMOCLAW_SESSION_TTL_MS || '', 10) || 30 * 60 * 1000;
+        /** Sweep interval to clean up idle sessions (every 5 min) */
+        const sweepInterval = setInterval(() => {
+            const now = Date.now();
+            for (const [id, lastActive] of sessionActivity) {
+                if (now - lastActive > SESSION_TTL_MS) {
+                    const transport = sessions.get(id);
+                    if (transport) {
+                        try {
+                            transport.close?.();
+                        }
+                        catch { /* ignore */ }
+                    }
+                    sessions.delete(id);
+                    sessionActivity.delete(id);
+                }
+            }
+        }, 5 * 60 * 1000);
+        sweepInterval.unref(); // Don't prevent process exit
+        /** Touch session activity timestamp */
+        function touchSession(id) {
+            sessionActivity.set(id, Date.now());
+        }
         const httpServer = createServer(async (req, res) => {
             const url = new URL(req.url || '/', `http://localhost:${port}`);
             // Health check endpoint
             if (url.pathname === '/health' && req.method === 'GET') {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ status: 'ok', version: VERSION }));
+                res.end(JSON.stringify({ status: 'ok', version: VERSION, activeSessions: sessions.size }));
                 return;
             }
             // MCP endpoint
@@ -121,6 +146,7 @@ async function main() {
                         const transport = sessions.get(sessionId);
                         await transport.handleRequest(req, res);
                         sessions.delete(sessionId);
+                        sessionActivity.delete(sessionId);
                     }
                     else {
                         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -132,6 +158,7 @@ async function main() {
                 if (sessionId && sessions.has(sessionId)) {
                     // Route to existing session transport
                     const transport = sessions.get(sessionId);
+                    touchSession(sessionId);
                     await transport.handleRequest(req, res);
                     return;
                 }
@@ -149,6 +176,7 @@ async function main() {
                 transport.onclose = () => {
                     if (transport.sessionId) {
                         sessions.delete(transport.sessionId);
+                        sessionActivity.delete(transport.sessionId);
                     }
                 };
                 await server.connect(transport);
@@ -156,6 +184,7 @@ async function main() {
                 await transport.handleRequest(req, res);
                 if (transport.sessionId) {
                     sessions.set(transport.sessionId, transport);
+                    touchSession(transport.sessionId);
                 }
                 return;
             }
