@@ -10,6 +10,7 @@ import {
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  CompleteRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -23,6 +24,7 @@ import { TOOLS } from './tools.js';
 import { createHandler } from './handlers.js';
 import { RESOURCES, RESOURCE_TEMPLATES, createResourceHandler } from './resources.js';
 import { PROMPTS, createPromptHandler } from './prompts.js';
+import { createCompletionHandler } from './completions.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -39,10 +41,11 @@ const api = createApiClient(config);
 const handleToolCall = createHandler(api, config);
 const handleReadResource = createResourceHandler(api, config);
 const handleGetPrompt = createPromptHandler(api, config);
+const handleComplete = createCompletionHandler(api, config);
 
 const server = new Server(
   { name: 'memoclaw', version: VERSION },
-  { capabilities: { tools: {}, resources: {}, prompts: {} } }
+  { capabilities: { tools: {}, resources: {}, prompts: {}, completions: {} } }
 );
 
 // List available tools
@@ -77,6 +80,12 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const msg = error instanceof Error ? error.message : String(error);
     throw new Error(`Prompt failed: ${msg}`);
   }
+});
+
+// Handle completion requests (autocomplete for prompt/resource arguments)
+server.setRequestHandler(CompleteRequestSchema, async (request) => {
+  const { ref, argument } = request.params;
+  return await handleComplete(ref, argument);
 });
 
 // Handle tool calls
