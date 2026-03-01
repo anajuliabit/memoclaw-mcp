@@ -29,6 +29,7 @@ Optionally set a custom API URL:
 export MEMOCLAW_URL=https://api.memoclaw.com  # default
 export MEMOCLAW_TIMEOUT=30000                 # request timeout in ms (default: 30000)
 export MEMOCLAW_MAX_RETRIES=3                 # retries for transient failures (default: 3)
+export MEMOCLAW_HTTP_TOKEN=mysecrettoken       # bearer token for HTTP transport auth (optional)
 ```
 
 ### Claude Desktop
