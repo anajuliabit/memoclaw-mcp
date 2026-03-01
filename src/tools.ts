@@ -456,7 +456,7 @@ export const TOOLS = [
             },
             required: ['content'],
           },
-          description: 'Array of memory objects. Max 50.',
+          description: 'Array of memory objects. Max 100.',
         },
         session_id: { type: 'string', description: 'Session ID applied to all memories.' },
         agent_id: { type: 'string', description: 'Agent ID applied to all memories.' },
