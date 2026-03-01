@@ -282,6 +282,7 @@ export const TOOLS = [
       type: 'object' as const,
       properties: {
         namespace: { type: 'string', description: 'Only consolidate within this namespace.' },
+        agent_id: { type: 'string', description: 'Only consolidate memories for this agent.' },
         min_similarity: { type: 'number', description: 'Minimum similarity for duplicates (0.0-1.0).' },
         mode: { type: 'string', description: 'Consolidation strategy/mode.' },
         dry_run: { type: 'boolean', description: 'If true, returns what WOULD be merged without actually merging.' },
@@ -428,7 +429,7 @@ export const TOOLS = [
   {
     name: 'memoclaw_bulk_store',
     description:
-      'Store multiple memories in a single call. Max 50 per call. ' +
+      'Store multiple memories in a single call. Max 100 per call. ' +
       'Each memory can have its own tags, namespace, importance, etc.',
     annotations: {
       title: 'Bulk store memories',

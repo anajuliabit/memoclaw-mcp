@@ -1026,13 +1026,13 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('non-empty array');
   });
 
-  it('bulk_store with >50 memories returns error', async () => {
-    const memories = Array.from({ length: 51 }, (_, i) => ({ content: `m${i}` }));
+  it('bulk_store with >100 memories returns error', async () => {
+    const memories = Array.from({ length: 101 }, (_, i) => ({ content: `m${i}` }));
     const result = await callToolHandler({
       params: { name: 'memoclaw_bulk_store', arguments: { memories } },
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Maximum 50');
+    expect(result.content[0].text).toContain('Maximum 100');
   });
 
   it('bulk_store rejects memory exceeding 8192 chars', async () => {

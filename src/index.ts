@@ -34,6 +34,35 @@ try {
   // Fallback to hardcoded version
 }
 
+// Handle --version and --help before loading config (which requires a private key)
+if (process.argv.includes('--version') || process.argv.includes('-v')) {
+  console.log(VERSION);
+  process.exit(0);
+}
+
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`memoclaw-mcp v${VERSION}
+
+Usage: memoclaw-mcp [options]
+
+Options:
+  --http          Use Streamable HTTP transport (default: stdio)
+  --version, -v   Show version number
+  --help, -h      Show this help message
+
+Environment variables:
+  MEMOCLAW_PRIVATE_KEY    Wallet private key (required)
+  MEMOCLAW_URL            API base URL (default: https://api.memoclaw.com)
+  MEMOCLAW_TRANSPORT      Transport mode: stdio | http (default: stdio)
+  MEMOCLAW_PORT           HTTP port (default: 3100)
+  MEMOCLAW_TIMEOUT        Request timeout in ms (default: 30000)
+  MEMOCLAW_MAX_RETRIES    Max retries for transient failures (default: 3)
+  MEMOCLAW_SESSION_TTL_MS Session idle TTL in ms (default: 1800000)
+
+More info: https://docs.memoclaw.com`);
+  process.exit(0);
+}
+
 const config = loadConfig();
 const api = createApiClient(config);
 const handleToolCall = createHandler(api, config);
@@ -235,3 +264,14 @@ async function main() {
 }
 
 main().catch(console.error);
+
+// Graceful shutdown
+function shutdown() {
+  console.error('MemoClaw MCP server shutting down...');
+  server.close().catch(() => {});
+  // Give transports time to flush, then exit
+  setTimeout(() => process.exit(0), 500);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

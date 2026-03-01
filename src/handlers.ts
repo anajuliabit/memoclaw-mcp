@@ -175,9 +175,10 @@ export function createHandler(api: ApiClient, config: Config) {
       }
 
       case 'memoclaw_consolidate': {
-        const { namespace, min_similarity, mode, dry_run } = args;
+        const { namespace, min_similarity, mode, dry_run, agent_id } = args;
         const body: any = {};
         if (namespace) body.namespace = namespace;
+        if (agent_id) body.agent_id = agent_id;
         if (min_similarity !== undefined) body.min_similarity = min_similarity;
         if (mode) body.mode = mode;
         if (dry_run !== undefined) body.dry_run = dry_run;
@@ -334,7 +335,7 @@ export function createHandler(api: ApiClient, config: Config) {
         if (!memories || !Array.isArray(memories) || memories.length === 0) {
           throw new Error('memories is required and must be a non-empty array');
         }
-        if (memories.length > 50) throw new Error('Maximum 50 memories per bulk store call');
+        if (memories.length > 100) throw new Error('Maximum 100 memories per bulk store call');
         for (const [i, m] of memories.entries()) {
           if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
             throw new Error(`Memory at index ${i} has empty content`);
