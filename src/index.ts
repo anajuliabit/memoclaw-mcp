@@ -59,6 +59,7 @@ Environment variables:
   MEMOCLAW_PORT           HTTP port (default: 3100)
   MEMOCLAW_TIMEOUT        Request timeout in ms (default: 30000)
   MEMOCLAW_MAX_RETRIES    Max retries for transient failures (default: 3)
+  MEMOCLAW_HTTP_TOKEN     Bearer token for HTTP transport auth (optional)
   MEMOCLAW_SESSION_TTL_MS Session idle TTL in ms (default: 1800000)
 
 More info: https://docs.memoclaw.com`);
@@ -142,6 +143,11 @@ function getTransportMode(): 'stdio' | 'http' {
   return 'stdio';
 }
 
+/** Optional bearer token for HTTP transport auth */
+function getHttpToken(): string | undefined {
+  return process.env.MEMOCLAW_HTTP_TOKEN || undefined;
+}
+
 /** Default port for HTTP transport */
 function getHttpPort(): number {
   const envPort = process.env.MEMOCLAW_PORT || process.env.PORT;
@@ -187,14 +193,27 @@ async function main() {
       sessionActivity.set(id, Date.now());
     }
 
+    const httpToken = getHttpToken();
+
     const httpServer = createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://localhost:${port}`);
 
-      // Health check endpoint
+      // Health check endpoint (no auth required)
       if (url.pathname === '/health' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', version: VERSION, activeSessions: sessions.size }));
         return;
+      }
+
+      // Bearer token auth for /mcp when MEMOCLAW_HTTP_TOKEN is set
+      if (httpToken && url.pathname === '/mcp') {
+        const authHeader = req.headers['authorization'] || '';
+        const match = authHeader.match(/^Bearer\s+(.+)$/i);
+        if (!match || match[1] !== httpToken) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized. Provide Authorization: Bearer <token> header.' }));
+          return;
+        }
       }
 
       // MCP endpoint
