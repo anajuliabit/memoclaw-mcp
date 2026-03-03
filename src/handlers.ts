@@ -268,7 +268,11 @@ export function createHandler(api: ApiClient, config: Config) {
             ? list.map((m: any) => JSON.stringify(m)).join('\n')
             : JSON.stringify(list, null, 2);
           return { content: [{ type: 'text', text: `📦 Exported ${list.length} memories\n\n${output}` }] };
-        } catch {
+        } catch (exportErr: any) {
+          // Only fall back to pagination if /v1/export is not found (404)
+          if (!exportErr.message?.includes('404') && !exportErr.message?.includes('Not Found')) {
+            throw exportErr;
+          }
           // Fallback: paginate through /v1/memories if /v1/export is unavailable
           const allMemories: any[] = [];
           let offset = 0;
@@ -305,6 +309,38 @@ export function createHandler(api: ApiClient, config: Config) {
           validateContentLength(m.content, `Memory at index ${i}`);
           validateImportance(m.importance, `Memory at index ${i} importance`);
         }
+
+        const IMPORT_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'immutable'];
+
+        // Try batch API endpoint first
+        try {
+          const batchBody: any = {
+            memories: memories.map((m: any) => {
+              const item: any = {};
+              for (const key of IMPORT_FIELDS) {
+                if (m[key] !== undefined) item[key] = m[key];
+              }
+              if (session_id) item.session_id = session_id;
+              if (agent_id) item.agent_id = agent_id;
+              return item;
+            }),
+          };
+          const result = await makeRequest('POST', '/v1/store/batch', batchBody);
+          const stored = result.memories || result.data || [];
+          const failedItems = result.failed || [];
+          let text = `📥 Import: ${stored.length} stored, ${failedItems.length} failed`;
+          if (failedItems.length > 0) {
+            const errors = failedItems.map((f: any) => `index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
+            text += `\n\nErrors:\n${errors.join('\n')}`;
+          }
+          return { content: [{ type: 'text', text }] };
+        } catch (batchErr: any) {
+          if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
+            throw batchErr;
+          }
+        }
+
+        // Fallback: store one-by-one with concurrency
         const results = await withConcurrency(
           memories.map((m: any) => () => {
             const body: any = { content: m.content };
@@ -344,6 +380,38 @@ export function createHandler(api: ApiClient, config: Config) {
           validateImportance(m.importance, `Memory at index ${i} importance`);
         }
         const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable'];
+
+        // Try batch API endpoint first (single request), fall back to one-by-one
+        try {
+          const batchBody: any = {
+            memories: memories.map((m: any) => {
+              const item: any = {};
+              for (const key of STORE_FIELDS) {
+                if (m[key] !== undefined) item[key] = m[key];
+              }
+              if (session_id) item.session_id = session_id;
+              if (agent_id) item.agent_id = agent_id;
+              return item;
+            }),
+          };
+          const result = await makeRequest('POST', '/v1/store/batch', batchBody);
+          const stored = result.memories || result.data || [];
+          const failedItems = result.failed || [];
+          let text = `✅ Bulk store: ${stored.length} stored, ${failedItems.length} failed`;
+          if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
+          if (failedItems.length > 0) {
+            const errors = failedItems.map((f: any) => `index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
+            text += `\n\nErrors:\n${errors.join('\n')}`;
+          }
+          return { content: [{ type: 'text', text }] };
+        } catch (batchErr: any) {
+          // Fall back to one-by-one if batch endpoint is unavailable (404)
+          if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
+            throw batchErr;
+          }
+        }
+
+        // Fallback: store one-by-one with concurrency
         const results = await withConcurrency(
           memories.map((m: any) => () => {
             const body: any = {};
@@ -406,7 +474,7 @@ export function createHandler(api: ApiClient, config: Config) {
                 if (items.length < pageSize) { total = counted; break; }
                 offset += pageSize;
               }
-              if (typeof total === 'undefined') total = `${counted}+`;
+              if (total === 'unknown') total = `${counted}+`;
             }
           }
         }

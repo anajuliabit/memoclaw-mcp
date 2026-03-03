@@ -998,8 +998,8 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('index 1');
   });
 
-  it('import succeeds', async () => {
-    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+  it('import succeeds via batch endpoint', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1', content: 'a' }, { id: '2', content: 'b' }], failed: [] });
     const result = await callToolHandler({
       params: { name: 'memoclaw_import', arguments: { memories: [{ content: 'a' }, { content: 'b' }] } },
     });
@@ -1007,14 +1007,15 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('0 failed');
   });
 
-  it('import passes session_id and agent_id to each memory', async () => {
-    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+  it('import passes session_id and agent_id to each memory in batch', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1', content: 'a' }], failed: [] });
     await callToolHandler({
       params: { name: 'memoclaw_import', arguments: { memories: [{ content: 'a' }], session_id: 's1', agent_id: 'ag1' } },
     });
     const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-    expect(body.session_id).toBe('s1');
-    expect(body.agent_id).toBe('ag1');
+    // Batch endpoint sends { memories: [{ content, session_id, agent_id }] }
+    expect(body.memories[0].session_id).toBe('s1');
+    expect(body.memories[0].agent_id).toBe('ag1');
   });
 
   // --- Bulk Store ---
@@ -1061,8 +1062,38 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('index 1');
   });
 
-  it('bulk_store succeeds', async () => {
-    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+  it('bulk_store succeeds via batch endpoint', async () => {
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1', content: 'a' }, { id: '2', content: 'b' }], failed: [] });
+    const result = await callToolHandler({
+      params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'a' }, { content: 'b' }] } },
+    });
+    expect(result.content[0].text).toContain('2 stored');
+    expect(result.content[0].text).toContain('0 failed');
+  });
+
+  it('bulk_store falls back to one-by-one when batch endpoint returns 404', async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // First call is to /v1/store/batch → 404
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({ error: 'Not Found' }),
+          text: () => Promise.resolve('HTTP 404: Not Found'),
+          headers: new Headers(),
+        });
+      }
+      // Subsequent calls are individual /v1/store
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ memory: { id: String(callCount), content: 'test' } }),
+        text: () => Promise.resolve('{}'),
+        headers: new Headers(),
+      });
+    });
     const result = await callToolHandler({
       params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'a' }, { content: 'b' }] } },
     });
@@ -1253,13 +1284,14 @@ describe('Tool Handlers', () => {
   // --- Bulk Store field whitelisting ---
 
   it('bulk_store does not leak extra fields to API', async () => {
-    globalThis.fetch = mockFetchOk({ memory: { id: '1', content: 'test' } });
+    globalThis.fetch = mockFetchOk({ memories: [{ id: '1', content: 'ok' }], failed: [] });
     await callToolHandler({
       params: { name: 'memoclaw_bulk_store', arguments: { memories: [{ content: 'ok', extra_bad_field: 'should not appear' }] } },
     });
     const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-    expect(body.content).toBe('ok');
-    expect(body.extra_bad_field).toBeUndefined();
+    // Now sends to /v1/store/batch with { memories: [...] }
+    expect(body.memories[0].content).toBe('ok');
+    expect(body.memories[0].extra_bad_field).toBeUndefined();
   });
 
   // --- Init tool ---

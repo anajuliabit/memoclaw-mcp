@@ -61,6 +61,8 @@ Environment variables:
   MEMOCLAW_MAX_RETRIES    Max retries for transient failures (default: 3)
   MEMOCLAW_HTTP_TOKEN     Bearer token for HTTP transport auth (optional)
   MEMOCLAW_SESSION_TTL_MS Session idle TTL in ms (default: 1800000)
+  MEMOCLAW_ALLOWED_ORIGINS Comma-separated allowed origins for HTTP transport
+                           (default: localhost only; set to * to allow all)
 
 More info: https://docs.memoclaw.com`);
   process.exit(0);
@@ -195,14 +197,57 @@ async function main() {
 
     const httpToken = getHttpToken();
 
+    /**
+     * Allowed origins for HTTP transport.
+     * Validates Origin header to prevent DNS rebinding attacks.
+     * Set MEMOCLAW_ALLOWED_ORIGINS to a comma-separated list of origins,
+     * or leave unset to allow only localhost/127.0.0.1 origins by default.
+     */
+    function getAllowedOrigins(): Set<string> | 'any' {
+      const env = process.env.MEMOCLAW_ALLOWED_ORIGINS;
+      if (env === '*') return 'any';
+      if (env) {
+        return new Set(env.split(',').map((o) => o.trim().toLowerCase()).filter(Boolean));
+      }
+      // Default: allow localhost origins only (prevents DNS rebinding)
+      return new Set([
+        `http://localhost:${port}`,
+        `http://127.0.0.1:${port}`,
+        `http://[::1]:${port}`,
+      ]);
+    }
+
+    const allowedOrigins = getAllowedOrigins();
+
+    /**
+     * Check if the Origin header is allowed.
+     * Requests without an Origin header are allowed (non-browser clients, stdio proxies).
+     * Requests WITH an Origin must match the allowlist to prevent DNS rebinding.
+     */
+    function isOriginAllowed(origin: string | undefined): boolean {
+      if (!origin) return true; // Non-browser clients (curl, SDK, stdio proxy)
+      if (allowedOrigins === 'any') return true;
+      return allowedOrigins.has(origin.toLowerCase());
+    }
+
     const httpServer = createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://localhost:${port}`);
 
-      // Health check endpoint (no auth required)
+      // Health check endpoint (no auth required, no origin check)
       if (url.pathname === '/health' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', version: VERSION, activeSessions: sessions.size }));
         return;
+      }
+
+      // Origin validation for /mcp to prevent DNS rebinding attacks
+      if (url.pathname === '/mcp') {
+        const origin = req.headers['origin'] as string | undefined;
+        if (!isOriginAllowed(origin)) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `Origin "${origin}" is not allowed. Set MEMOCLAW_ALLOWED_ORIGINS to configure.` }));
+          return;
+        }
       }
 
       // Bearer token auth for /mcp when MEMOCLAW_HTTP_TOKEN is set
