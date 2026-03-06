@@ -117,11 +117,12 @@ describe('Tool Definitions', () => {
     expect(result.tools).toHaveLength(33);
   });
 
-  it('every tool has annotations with all required hints', async () => {
+  it('every tool has a title and annotations with all required hints', async () => {
     const result = await listToolsHandler();
     for (const tool of result.tools) {
+      // MCP 2025-06-18: title is a top-level tool property, not inside annotations
+      expect(typeof tool.title, `${tool.name} missing title`).toBe('string');
       expect(tool.annotations, `${tool.name} missing annotations`).toBeDefined();
-      expect(typeof tool.annotations.title).toBe('string');
       expect(typeof tool.annotations.readOnlyHint).toBe('boolean');
       expect(typeof tool.annotations.destructiveHint).toBe('boolean');
       expect(typeof tool.annotations.idempotentHint).toBe('boolean');
