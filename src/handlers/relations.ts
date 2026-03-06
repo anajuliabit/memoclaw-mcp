@@ -1,12 +1,13 @@
 import { formatMemory } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
+import type { CreateRelationArgs, ListRelationsArgs, DeleteRelationArgs, GraphArgs } from '../types.js';
 
 export async function handleRelations(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
   const { makeRequest } = ctx;
 
   switch (name) {
     case 'memoclaw_create_relation': {
-      const { memory_id, target_id, relation_type, metadata } = args;
+      const { memory_id, target_id, relation_type, metadata } = args as CreateRelationArgs;
       if (!memory_id || !target_id || !relation_type) {
         throw new Error('memory_id, target_id, and relation_type are all required');
       }
@@ -17,7 +18,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
     }
 
     case 'memoclaw_list_relations': {
-      const { memory_id } = args;
+      const { memory_id } = args as ListRelationsArgs;
       if (!memory_id) throw new Error('memory_id is required');
       const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
       const relations = result.relations || [];
@@ -31,14 +32,14 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
     }
 
     case 'memoclaw_delete_relation': {
-      const { memory_id, relation_id } = args;
+      const { memory_id, relation_id } = args as DeleteRelationArgs;
       if (!memory_id || !relation_id) throw new Error('memory_id and relation_id are required');
       const result = await makeRequest('DELETE', `/v1/memories/${memory_id}/relations/${relation_id}`);
       return { content: [{ type: 'text', text: `🗑️ Relation ${relation_id} deleted\n\n${JSON.stringify(result, null, 2)}` }] };
     }
 
     case 'memoclaw_graph': {
-      const { memory_id, depth: rawDepth, relation_type } = args;
+      const { memory_id, depth: rawDepth, relation_type } = args as GraphArgs;
       if (!memory_id) throw new Error('memory_id is required');
       const depth = Math.min(Math.max(rawDepth || 1, 1), 3);
       const visited = new Set<string>();
