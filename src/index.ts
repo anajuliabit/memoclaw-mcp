@@ -11,6 +11,7 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   CompleteRequestSchema,
+  SetLevelRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -25,6 +26,8 @@ import { createHandler } from './handlers.js';
 import { RESOURCES, RESOURCE_TEMPLATES, createResourceHandler } from './resources.js';
 import { PROMPTS, createPromptHandler } from './prompts.js';
 import { createCompletionHandler } from './completions.js';
+import { mcpLogger } from './logging.js';
+import type { LogLevel } from './logging.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -77,8 +80,11 @@ const handleComplete = createCompletionHandler(api, config);
 
 const server = new Server(
   { name: 'memoclaw', version: VERSION },
-  { capabilities: { tools: {}, resources: {}, prompts: {}, completions: {} } }
+  { capabilities: { tools: {}, resources: {}, prompts: {}, completions: {}, logging: {} } }
 );
+
+// Attach logger to server for sending notifications to clients
+mcpLogger.attach(server);
 
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
@@ -92,10 +98,12 @@ server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ reso
 // Read a resource
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
+  mcpLogger.debug('resource', { event: 'read', uri });
   try {
     return await handleReadResource(uri);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    mcpLogger.error('resource', { event: 'error', uri, error: msg });
     throw new Error(`Resource read failed: ${msg}`);
   }
 });
@@ -120,13 +128,25 @@ server.setRequestHandler(CompleteRequestSchema, async (request) => {
   return await handleComplete(ref, argument);
 });
 
+// Handle logging level changes
+server.setRequestHandler(SetLevelRequestSchema, async (request) => {
+  const level = request.params.level as LogLevel;
+  mcpLogger.setLevel(level);
+  mcpLogger.info('memoclaw', `Log level set to ${level}`);
+  return {};
+});
+
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  mcpLogger.debug('tool', { event: 'call', tool: name, args });
   try {
-    return await handleToolCall(name, args as any);
+    const result = await handleToolCall(name, args as any);
+    mcpLogger.debug('tool', { event: 'success', tool: name });
+    return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    mcpLogger.error('tool', { event: 'error', tool: name, error: msg });
     return {
       content: [{ type: 'text', text: `Error: ${msg}` }],
       isError: true,

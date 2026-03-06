@@ -4,6 +4,7 @@ import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { toClientEvmSigner } from '@x402/evm';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Config } from './config.js';
+import { mcpLogger } from './logging.js';
 
 export function createApiClient(config: Config) {
   const account = privateKeyToAccount(config.privateKey as `0x${string}`);
@@ -54,6 +55,7 @@ export function createApiClient(config: Config) {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) {
+        mcpLogger.debug('api', { event: 'retry', method, path, attempt });
         await backoff(attempt - 1);
       }
 
@@ -81,6 +83,7 @@ export function createApiClient(config: Config) {
 
         // Handle 402 Payment Required (free tier exhausted) — no retry needed
         if (res.status === 402) {
+          mcpLogger.info('api', { event: 'payment_required', method, path, message: 'Free tier exhausted, using x402 payment' });
           const errorBody = await res.json();
           const client = getX402Client();
           const paymentRequired = client.getPaymentRequiredResponse(
