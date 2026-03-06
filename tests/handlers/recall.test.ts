@@ -1,0 +1,116 @@
+import { describe, it, expect } from 'vitest';
+import { handleRecall } from '../../src/handlers/recall.js';
+import { createContext } from '../../src/handlers/types.js';
+import { mockApi, testConfig } from './helpers.js';
+
+function makeCtx(routes: Record<string, any> = {}) {
+  const api = mockApi(routes);
+  return { ctx: createContext(api as any, testConfig), api };
+}
+
+describe('handleRecall', () => {
+  describe('memoclaw_recall', () => {
+    it('returns formatted memories', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/recall': { memories: [{ id: '1', content: 'match', similarity: 0.95 }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_recall', { query: 'test' });
+      expect(result!.content[0].text).toContain('Found 1 memories');
+      expect(result!.content[0].text).toContain('match');
+    });
+
+    it('returns message when no memories found', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_recall', { query: 'nothing' });
+      expect(result!.content[0].text).toContain('No memories found');
+    });
+
+    it('rejects empty query', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRecall(ctx, 'memoclaw_recall', { query: '' }))
+        .rejects.toThrow('query is required');
+    });
+
+    it('passes filters to API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', {
+        query: 'test', tags: ['a'], memory_type: 'fact', namespace: 'ns',
+        limit: 5, min_similarity: 0.8,
+      });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters.tags).toEqual(['a']);
+      expect(body.filters.memory_type).toBe('fact');
+      expect(body.namespace).toBe('ns');
+      expect(body.limit).toBe(5);
+    });
+  });
+
+  describe('memoclaw_search', () => {
+    it('returns text search results', async () => {
+      const { ctx } = makeCtx({
+        'GET /v1/memories/search': { memories: [{ id: '1', content: 'found' }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_search', { query: 'found' });
+      expect(result!.content[0].text).toContain('Found 1 memories');
+    });
+
+    it('rejects empty query', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRecall(ctx, 'memoclaw_search', { query: '  ' }))
+        .rejects.toThrow('query is required');
+    });
+  });
+
+  describe('memoclaw_context', () => {
+    it('returns context memories', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/context': { memories: [{ id: '1', content: 'ctx' }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_context', { query: 'topic' });
+      expect(result!.content[0].text).toContain('Context for "topic"');
+    });
+
+    it('handles empty context', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/context': { memories: [] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_context', { query: 'nothing' });
+      expect(result!.content[0].text).toContain('No relevant context');
+    });
+  });
+
+  describe('memoclaw_suggested', () => {
+    it('returns suggestions', async () => {
+      const { ctx } = makeCtx({
+        'GET /v1/suggested': { suggestions: [{ id: '1', content: 'suggestion' }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_suggested', {});
+      expect(result!.content[0].text).toContain('1 suggestions');
+    });
+
+    it('handles empty suggestions', async () => {
+      const { ctx } = makeCtx({
+        'GET /v1/suggested': { suggestions: [] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_suggested', {});
+      expect(result!.content[0].text).toContain('No suggestions found');
+    });
+
+    it('includes category in output', async () => {
+      const { ctx } = makeCtx({
+        'GET /v1/suggested': { suggestions: [{ id: '1', content: 'x' }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_suggested', { category: 'personal' });
+      expect(result!.content[0].text).toContain('(personal)');
+    });
+  });
+
+  it('returns null for unknown tools', async () => {
+    const { ctx } = makeCtx();
+    expect(await handleRecall(ctx, 'memoclaw_store', {})).toBeNull();
+  });
+});
