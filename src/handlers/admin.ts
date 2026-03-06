@@ -2,6 +2,11 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import { formatMemory, withConcurrency, validateContentLength, validateImportance } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
+import type {
+  StatusArgs, InitArgs, IngestArgs, ExtractArgs, ConsolidateArgs,
+  ExportArgs, MigrateArgs, DeleteNamespaceArgs, TagsArgs, HistoryArgs,
+  NamespacesArgs, CoreMemoriesArgs, StatsArgs,
+} from '../types.js';
 
 export async function handleAdmin(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
   const { makeRequest, account, config } = ctx;
@@ -44,7 +49,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_ingest': {
-      const { messages, text, namespace, session_id, agent_id, auto_relate } = args;
+      const { messages, text, namespace, session_id, agent_id, auto_relate } = args as IngestArgs;
       if (!messages && !text) throw new Error('Either messages or text is required');
       const result = await makeRequest('POST', '/v1/ingest', {
         messages, text, namespace, session_id, agent_id, auto_relate: auto_relate !== false,
@@ -54,7 +59,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_extract': {
-      const { messages, namespace, session_id, agent_id } = args;
+      const { messages, namespace, session_id, agent_id } = args as ExtractArgs;
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         throw new Error('messages is required and must be a non-empty array');
       }
@@ -63,7 +68,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_consolidate': {
-      const { namespace, min_similarity, mode, dry_run, agent_id } = args;
+      const { namespace, min_similarity, mode, dry_run, agent_id } = args as ConsolidateArgs;
       const body: any = {};
       if (namespace) body.namespace = namespace;
       if (agent_id) body.agent_id = agent_id;
@@ -76,7 +81,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_export': {
-      const { namespace, agent_id, format: fmt } = args;
+      const { namespace, agent_id, format: fmt } = args as ExportArgs;
       const params = new URLSearchParams();
       if (namespace) params.set('namespace', namespace);
       if (agent_id) params.set('agent_id', agent_id);
@@ -119,7 +124,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_migrate': {
-      const { path: filePath, files, namespace, agent_id, deduplicate, dry_run } = args;
+      const { path: filePath, files, namespace, agent_id, deduplicate, dry_run } = args as MigrateArgs;
       if (!filePath && !files) {
         throw new Error('Either "path" (file/directory path) or "files" (array of {filename, content}) is required');
       }
@@ -198,7 +203,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_delete_namespace': {
-      const { namespace, agent_id } = args;
+      const { namespace, agent_id } = args as DeleteNamespaceArgs;
       if (!namespace) throw new Error('namespace is required');
       const deletedIds: string[] = [];
       const errors: string[] = [];
@@ -242,7 +247,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_tags': {
-      const { namespace, agent_id } = args;
+      const { namespace, agent_id } = args as TagsArgs;
       try {
         const params = new URLSearchParams();
         if (namespace) params.set('namespace', namespace);
@@ -285,7 +290,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_history': {
-      const { id } = args;
+      const { id } = args as HistoryArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('GET', `/v1/memories/${id}/history`);
       const history = result.history || result.versions || result.data || [];
@@ -310,7 +315,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_namespaces': {
-      const { agent_id } = args;
+      const { agent_id } = args as NamespacesArgs;
       try {
         const params = new URLSearchParams();
         if (agent_id) params.set('agent_id', agent_id);
@@ -351,7 +356,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     }
 
     case 'memoclaw_core_memories': {
-      const { limit, namespace, agent_id } = args;
+      const { limit, namespace, agent_id } = args as CoreMemoriesArgs;
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (namespace) params.set('namespace', namespace);

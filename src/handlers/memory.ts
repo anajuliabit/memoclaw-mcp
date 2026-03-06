@@ -1,12 +1,17 @@
 import { formatMemory, withConcurrency, validateContentLength, validateImportance, UPDATE_FIELDS } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
+import type {
+  StoreArgs, GetArgs, ListArgs, UpdateArgs, DeleteArgs,
+  BulkDeleteArgs, BulkStoreArgs, ImportArgs, PinArgs, UnpinArgs,
+  BatchUpdateArgs, CountArgs,
+} from '../types.js';
 
 export async function handleMemory(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
   const { makeRequest } = ctx;
 
   switch (name) {
     case 'memoclaw_store': {
-      const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable } = args;
+      const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable } = args as StoreArgs;
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
@@ -27,14 +32,14 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_get': {
-      const { id } = args;
+      const { id } = args as GetArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('GET', `/v1/memories/${id}`);
       return { content: [{ type: 'text', text: `${formatMemory(result.memory || result)}\n\n${JSON.stringify(result, null, 2)}` }] };
     }
 
     case 'memoclaw_list': {
-      const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after } = args;
+      const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after } = args as ListArgs;
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (offset !== undefined) params.set('offset', String(offset));
@@ -54,7 +59,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_update': {
-      const { id, ...allFields } = args;
+      const { id, ...allFields } = args as UpdateArgs;
       if (!id) throw new Error('id is required');
       const updateFields: Record<string, any> = {};
       for (const [key, value] of Object.entries(allFields)) {
@@ -70,14 +75,14 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_delete': {
-      const { id } = args;
+      const { id } = args as DeleteArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('DELETE', `/v1/memories/${id}`);
       return { content: [{ type: 'text', text: `🗑️ Memory ${id} deleted\n\n${JSON.stringify(result, null, 2)}` }] };
     }
 
     case 'memoclaw_bulk_delete': {
-      const { ids } = args;
+      const { ids } = args as BulkDeleteArgs;
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
         throw new Error('ids is required and must be a non-empty array');
       }
@@ -113,7 +118,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_bulk_store': {
-      const { memories, session_id, agent_id } = args;
+      const { memories, session_id, agent_id } = args as BulkStoreArgs;
       if (!memories || !Array.isArray(memories) || memories.length === 0) {
         throw new Error('memories is required and must be a non-empty array');
       }
@@ -184,7 +189,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_import': {
-      const { memories, session_id, agent_id } = args;
+      const { memories, session_id, agent_id } = args as ImportArgs;
       if (!memories || !Array.isArray(memories) || memories.length === 0) {
         throw new Error('memories is required and must be a non-empty array');
       }
@@ -254,21 +259,21 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_pin': {
-      const { id } = args;
+      const { id } = args as PinArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: true });
       return { content: [{ type: 'text', text: `📌 Memory ${id} pinned\n${formatMemory(result.memory || result)}` }] };
     }
 
     case 'memoclaw_unpin': {
-      const { id } = args;
+      const { id } = args as UnpinArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: false });
       return { content: [{ type: 'text', text: `📌 Memory ${id} unpinned\n${formatMemory(result.memory || result)}` }] };
     }
 
     case 'memoclaw_batch_update': {
-      const { updates } = args;
+      const { updates } = args as BatchUpdateArgs;
       if (!updates || !Array.isArray(updates) || updates.length === 0) {
         throw new Error('updates is required and must be a non-empty array');
       }
@@ -314,7 +319,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_count': {
-      const { namespace, tags, agent_id, memory_type } = args;
+      const { namespace, tags, agent_id, memory_type } = args as CountArgs;
       const params = new URLSearchParams();
       if (namespace) params.set('namespace', namespace);
       if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));

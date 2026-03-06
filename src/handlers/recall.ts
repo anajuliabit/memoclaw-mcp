@@ -1,12 +1,13 @@
 import { formatMemory } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
+import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs } from '../types.js';
 
 export async function handleRecall(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
   const { makeRequest } = ctx;
 
   switch (name) {
     case 'memoclaw_recall': {
-      const { query, limit, min_similarity, tags, namespace, memory_type, session_id, agent_id, include_relations, after } = args;
+      const { query, limit, min_similarity, tags, namespace, memory_type, session_id, agent_id, include_relations, after } = args as RecallArgs;
       if (!query || (typeof query === 'string' && query.trim() === '')) {
         throw new Error('query is required and cannot be empty');
       }
@@ -28,7 +29,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_search': {
-      const { query, limit, namespace, tags, memory_type, session_id, agent_id, after } = args;
+      const { query, limit, namespace, tags, memory_type, session_id, agent_id, after } = args as SearchArgs;
       if (!query || (typeof query === 'string' && query.trim() === '')) {
         throw new Error('query is required and cannot be empty');
       }
@@ -51,7 +52,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_context': {
-      const { query, limit, namespace, session_id, agent_id } = args;
+      const { query, limit, namespace, session_id, agent_id } = args as ContextArgs;
       if (!query || (typeof query === 'string' && query.trim() === '')) {
         throw new Error('query is required and cannot be empty');
       }
@@ -70,7 +71,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_suggested': {
-      const { limit, namespace, session_id, agent_id, category } = args;
+      const { limit, namespace, session_id, agent_id, category } = args as SuggestedArgs;
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (namespace) params.set('namespace', namespace);
