@@ -1,6 +1,6 @@
 import { formatMemory, userAndAssistantText, assistantText, userText } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
-import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs } from '../types.js';
+import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
 
 export async function handleRecall(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
   const { makeRequest } = ctx;
@@ -111,6 +111,47 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
           assistantText(JSON.stringify(result, null, 2)),
         ],
         structuredContent: { suggestions },
+      };
+    }
+
+    case 'memoclaw_check_duplicates': {
+      const { content, min_similarity, namespace, limit } = args as CheckDuplicatesArgs;
+      if (!content || (typeof content === 'string' && content.trim() === '')) {
+        throw new Error('content is required and cannot be empty');
+      }
+      const threshold = min_similarity ?? 0.7;
+      const maxResults = limit ?? 5;
+      const body: any = { query: content, limit: maxResults, min_similarity: threshold };
+      if (namespace) body.namespace = namespace;
+      const result = await makeRequest('POST', '/v1/recall', body);
+      const duplicates = result.memories || [];
+      const hasDuplicates = duplicates.length > 0;
+
+      let suggestion: string;
+      if (!hasDuplicates) {
+        suggestion = 'No similar memories found. Safe to store.';
+      } else {
+        const topSim = duplicates[0]?.similarity;
+        if (typeof topSim === 'number' && topSim >= 0.9) {
+          suggestion = `Very similar memory exists (${(topSim * 100).toFixed(0)}% match). Consider updating memory ${duplicates[0].id} instead of creating a new one.`;
+        } else if (typeof topSim === 'number' && topSim >= 0.7) {
+          suggestion = `Similar memory found (${(topSim * 100).toFixed(0)}% match). Review before storing to avoid duplication.`;
+        } else {
+          suggestion = `Weakly similar memories found. Probably safe to store as new.`;
+        }
+      }
+
+      let text: string;
+      if (!hasDuplicates) {
+        text = `✅ No duplicates found (threshold: ${threshold}). Safe to store.`;
+      } else {
+        const formatted = duplicates.map((m: any) => formatMemory(m)).join('\n\n');
+        text = `⚠️ Found ${duplicates.length} potential duplicate(s) (threshold: ${threshold}):\n\n${formatted}\n\n💡 ${suggestion}`;
+      }
+
+      return {
+        content: [userAndAssistantText(text)],
+        structuredContent: { has_duplicates: hasDuplicates, duplicates, suggestion },
       };
     }
 
