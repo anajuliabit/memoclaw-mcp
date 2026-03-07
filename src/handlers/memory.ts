@@ -430,7 +430,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
             let counted = 0;
             let offset = 0;
             const pageSize = 100;
-            while (offset < 100000) {
+            while (offset < 10000) {
               const pageParams = new URLSearchParams(params);
               pageParams.set('limit', String(pageSize));
               pageParams.set('offset', String(offset));

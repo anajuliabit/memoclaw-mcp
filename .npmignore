@@ -1,0 +1,14 @@
+# Source (compiled output is in dist/)
+src/
+tests/
+tsconfig.json
+vitest.config.ts
+
+# CI/CD
+.github/
+
+# Dev files
+.gitignore
+.eslintrc*
+.prettierrc*
+CHANGELOG.md
