@@ -25,10 +25,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         return { content: [userText(`No memories found for query: "${query}"`, 0.3)] };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [
-        userAndAssistantText(`Found ${memories.length} memories:\n\n${formatted}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`Found ${memories.length} memories:\n\n${formatted}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { memories },
+      };
     }
 
     case 'memoclaw_search': {
@@ -51,10 +54,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         return { content: [userText(`No memories found containing: "${query}"`, 0.3)] };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [
-        userAndAssistantText(`Found ${memories.length} memories containing "${query}":\n\n${formatted}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`Found ${memories.length} memories containing "${query}":\n\n${formatted}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { memories },
+      };
     }
 
     case 'memoclaw_context': {
