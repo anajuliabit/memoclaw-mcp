@@ -269,6 +269,13 @@ export interface MigrateFile {
   content: string;
 }
 
+export interface CheckDuplicatesArgs {
+  content: string;
+  min_similarity?: number;
+  namespace?: string;
+  limit?: number;
+}
+
 export interface MigrateArgs {
   path?: string;
   files?: MigrateFile[];
@@ -313,7 +320,8 @@ export type ToolArgs =
   | { name: 'memoclaw_namespaces'; args: NamespacesArgs }
   | { name: 'memoclaw_core_memories'; args: CoreMemoriesArgs }
   | { name: 'memoclaw_stats'; args: StatsArgs }
-  | { name: 'memoclaw_migrate'; args: MigrateArgs };
+  | { name: 'memoclaw_migrate'; args: MigrateArgs }
+  | { name: 'memoclaw_check_duplicates'; args: CheckDuplicatesArgs };
 
 /** Map from tool name to its args type */
 export type ToolArgsMap = {

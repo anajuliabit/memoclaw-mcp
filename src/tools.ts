@@ -1099,4 +1099,38 @@ export const TOOLS = [
       },
     },
   },
+  {
+    name: 'memoclaw_check_duplicates',
+    description:
+      '🔍 PRE-STORE DEDUP: Check if similar content already exists before storing a new memory. ' +
+      'Returns potential duplicates above the similarity threshold. ' +
+      'Use this to avoid storing redundant memories and save API credits. ' +
+      'Internally uses semantic recall, so the cost is one recall call ($0.005).',
+    title: 'Check for duplicates',
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        content: { type: 'string', description: 'The content you plan to store. This will be compared semantically against existing memories.' },
+        min_similarity: { type: 'number', description: 'Minimum similarity threshold (0.0-1.0). Default: 0.7. Higher values = stricter matching.' },
+        namespace: { type: 'string', description: 'Only check within this namespace.' },
+        limit: { type: 'number', description: 'Maximum number of potential duplicates to return. Default: 5.' },
+      },
+      required: ['content'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        has_duplicates: { type: 'boolean' as const },
+        duplicates: { type: 'array' as const, items: RECALL_RESULT_SCHEMA },
+        suggestion: { type: 'string' as const },
+      },
+      required: ['has_duplicates', 'duplicates'] as string[],
+    },
+  },
 ];
