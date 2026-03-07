@@ -108,10 +108,13 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       const { id } = args as DeleteArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('DELETE', `/v1/memories/${id}`);
-      return { content: [
-        userAndAssistantText(`🗑️ Memory ${id} deleted`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`🗑️ Memory ${id} deleted`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { deleted: true, id },
+      };
     }
 
     case 'memoclaw_bulk_delete': {
@@ -147,7 +150,10 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
       let text = `🗑️ Bulk delete: ${succeeded} succeeded, ${failed} failed`;
       if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
-      return { content: [userAndAssistantText(text)] };
+      return {
+        content: [userAndAssistantText(text)],
+        structuredContent: { succeeded, failed, errors },
+      };
     }
 
     case 'memoclaw_bulk_store': {
@@ -183,12 +189,16 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         const failedItems = result.failed || [];
         let text = `✅ Bulk store: ${stored.length} stored, ${failedItems.length} failed`;
         if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
+        const bulkErrors: string[] = [];
         if (failedItems.length > 0) {
-          const errors = failedItems.map((f: any) => `index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
-          text += `\n\nErrors:\n${errors.join('\n')}`;
+          for (const f of failedItems) bulkErrors.push(`index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
+          text += `\n\nErrors:\n${bulkErrors.join('\n')}`;
         }
         const resourceLinks = stored.filter((m: any) => m.id).map((m: any) => memoryResourceLink(m.id, 'Stored memory'));
-        return { content: [userAndAssistantText(text), ...resourceLinks] };
+        return {
+          content: [userAndAssistantText(text), ...resourceLinks],
+          structuredContent: { succeeded: stored.length, failed: failedItems.length, memories: stored, errors: bulkErrors },
+        };
       } catch (batchErr: any) {
         // Fall back to one-by-one if batch endpoint is unavailable (404)
         if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
@@ -220,7 +230,10 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
       if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
       const resourceLinks = stored.filter((m: any) => m?.id).map((m: any) => memoryResourceLink(m.id, 'Stored memory'));
-      return { content: [userAndAssistantText(text), ...resourceLinks] };
+      return {
+        content: [userAndAssistantText(text), ...resourceLinks],
+        structuredContent: { succeeded: succeeded.length, failed: failed.length, memories: stored, errors },
+      };
     }
 
     case 'memoclaw_import': {
@@ -256,12 +269,16 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         const stored = result.memories || result.data || [];
         const failedItems = result.failed || [];
         let text = `📥 Import: ${stored.length} stored, ${failedItems.length} failed`;
+        const importErrors: string[] = [];
         if (failedItems.length > 0) {
-          const errors = failedItems.map((f: any) => `index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
-          text += `\n\nErrors:\n${errors.join('\n')}`;
+          for (const f of failedItems) importErrors.push(`index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
+          text += `\n\nErrors:\n${importErrors.join('\n')}`;
         }
         const resourceLinks = stored.filter((m: any) => m.id).map((m: any) => memoryResourceLink(m.id, 'Imported memory'));
-        return { content: [userAndAssistantText(text), ...resourceLinks] };
+        return {
+          content: [userAndAssistantText(text), ...resourceLinks],
+          structuredContent: { succeeded: stored.length, failed: failedItems.length, errors: importErrors },
+        };
       } catch (batchErr: any) {
         if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
           throw batchErr;
@@ -291,27 +308,38 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         .filter(Boolean);
       let text = `📥 Import: ${succeeded} stored, ${failed} failed`;
       if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
-      return { content: [userAndAssistantText(text)] };
+      return {
+        content: [userAndAssistantText(text)],
+        structuredContent: { succeeded, failed, errors },
+      };
     }
 
     case 'memoclaw_pin': {
       const { id } = args as PinArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: true });
-      return { content: [
-        userAndAssistantText(`📌 Memory ${id} pinned\n${formatMemory(result.memory || result)}`),
-        memoryResourceLink(id, 'Pinned memory'),
-      ] };
+      const memory = result.memory || result;
+      return {
+        content: [
+          userAndAssistantText(`📌 Memory ${id} pinned\n${formatMemory(memory)}`),
+          memoryResourceLink(id, 'Pinned memory'),
+        ],
+        structuredContent: { memory },
+      };
     }
 
     case 'memoclaw_unpin': {
       const { id } = args as UnpinArgs;
       if (!id) throw new Error('id is required');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: false });
-      return { content: [
-        userAndAssistantText(`📌 Memory ${id} unpinned\n${formatMemory(result.memory || result)}`),
-        memoryResourceLink(id, 'Unpinned memory'),
-      ] };
+      const memory = result.memory || result;
+      return {
+        content: [
+          userAndAssistantText(`📌 Memory ${id} unpinned\n${formatMemory(memory)}`),
+          memoryResourceLink(id, 'Unpinned memory'),
+        ],
+        structuredContent: { memory },
+      };
     }
 
     case 'memoclaw_batch_update': {
@@ -333,11 +361,14 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         const batchResourceLinks = memories
           .filter((m: any) => m.id)
           .map((m: any) => memoryResourceLink(m.id, 'Updated memory'));
-        return { content: [
-          userAndAssistantText(text),
-          assistantText(JSON.stringify(result, null, 2)),
-          ...batchResourceLinks,
-        ] };
+        return {
+          content: [
+            userAndAssistantText(text),
+            assistantText(JSON.stringify(result, null, 2)),
+            ...batchResourceLinks,
+          ],
+          structuredContent: { updated: typeof updated === 'number' ? updated : memories.length, failed: 0, memories, errors: [] },
+        };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
           const results = await withConcurrency(
@@ -364,7 +395,10 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           const fallbackResourceLinks = updates
             .filter((_u: any, i: number) => results[i].status === 'fulfilled')
             .map((u: any) => memoryResourceLink(u.id, 'Updated memory'));
-          return { content: [userAndAssistantText(text), ...fallbackResourceLinks] };
+          return {
+            content: [userAndAssistantText(text), ...fallbackResourceLinks],
+            structuredContent: { updated: succeeded.length, failed: failed.length, memories, errors },
+          };
         }
         throw err;
       }

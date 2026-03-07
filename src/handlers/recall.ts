@@ -81,10 +81,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         return { content: [userText(`No relevant context found for: "${query}"`, 0.3)] };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [
-        userAndAssistantText(`🧠 Context for "${query}" (${memories.length} memories):\n\n${formatted}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`🧠 Context for "${query}" (${memories.length} memories):\n\n${formatted}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { memories },
+      };
     }
 
     case 'memoclaw_suggested': {
@@ -102,10 +105,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         return { content: [userText(`No suggestions found${category ? ` for category "${category}"` : ''}.`, 0.3)] };
       }
       const formatted = suggestions.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [
-        userAndAssistantText(`💡 ${suggestions.length} suggestions${category ? ` (${category})` : ''}:\n\n${formatted}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`💡 ${suggestions.length} suggestions${category ? ` (${category})` : ''}:\n\n${formatted}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { suggestions },
+      };
     }
 
     default:

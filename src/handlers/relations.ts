@@ -14,10 +14,14 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       const body: any = { target_id, relation_type };
       if (metadata) body.metadata = metadata;
       const result = await makeRequest('POST', `/v1/memories/${memory_id}/relations`, body);
-      return { content: [
-        userAndAssistantText(`🔗 Relation created: ${memory_id} —[${relation_type}]→ ${target_id}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      const relation = result.relation || result;
+      return {
+        content: [
+          userAndAssistantText(`🔗 Relation created: ${memory_id} —[${relation_type}]→ ${target_id}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { relation },
+      };
     }
 
     case 'memoclaw_list_relations': {
@@ -31,20 +35,26 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       const formatted = relations.map((r: any) =>
         `🔗 ${r.id || '?'}: ${r.source_id || memory_id} —[${r.relation_type}]→ ${r.target_id}`
       ).join('\n');
-      return { content: [
-        userAndAssistantText(`Relations for ${memory_id}:\n${formatted}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`Relations for ${memory_id}:\n${formatted}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { relations },
+      };
     }
 
     case 'memoclaw_delete_relation': {
       const { memory_id, relation_id } = args as DeleteRelationArgs;
       if (!memory_id || !relation_id) throw new Error('memory_id and relation_id are required');
       const result = await makeRequest('DELETE', `/v1/memories/${memory_id}/relations/${relation_id}`);
-      return { content: [
-        userAndAssistantText(`🗑️ Relation ${relation_id} deleted`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`🗑️ Relation ${relation_id} deleted`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { deleted: true, relation_id },
+      };
     }
 
     case 'memoclaw_graph': {
@@ -101,7 +111,10 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
 
       const nodesFmt = nodes.map((n: any) => formatMemory(n)).join('\n\n');
       const edgesFmt = edges.map((r: any) => `  ${r.source_id} —[${r.relation_type}]→ ${r.target_id}`).join('\n');
-      return { content: [userAndAssistantText(`🕸️ Graph from ${memory_id} (depth ${depth}):\n\n${nodes.length} nodes:\n${nodesFmt}\n\n${edges.length} edges:\n${edgesFmt || '  (none)'}`)] };
+      return {
+        content: [userAndAssistantText(`🕸️ Graph from ${memory_id} (depth ${depth}):\n\n${nodes.length} nodes:\n${nodesFmt}\n\n${edges.length} edges:\n${edgesFmt || '  (none)'}`)],
+        structuredContent: { nodes, edges },
+      };
     }
 
     default:

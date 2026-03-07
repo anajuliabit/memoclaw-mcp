@@ -102,14 +102,10 @@ describe('outputSchema on tool definitions (#91)', () => {
     expect(memSchema.required).toContain('content');
   });
 
-  it('tools without structured output do not have outputSchema', () => {
-    // Destructive/admin tools that return unstructured text shouldn't have outputSchema
-    const noSchemaTools = ['memoclaw_delete', 'memoclaw_bulk_delete', 'memoclaw_delete_namespace',
-      'memoclaw_init', 'memoclaw_status', 'memoclaw_ingest', 'memoclaw_extract',
-      'memoclaw_consolidate', 'memoclaw_migrate'];
-    for (const name of noSchemaTools) {
-      const tool = toolMap.get(name)!;
-      expect((tool as any).outputSchema, `${name} should NOT have outputSchema`).toBeUndefined();
+  it('all tools have outputSchema for MCP 2025-06-18 compliance', () => {
+    for (const tool of TOOLS) {
+      expect((tool as any).outputSchema, `${tool.name} should have outputSchema`).toBeDefined();
+      expect((tool as any).outputSchema.type, `${tool.name} outputSchema.type`).toBe('object');
     }
   });
 });

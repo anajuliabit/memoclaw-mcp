@@ -47,6 +47,36 @@ const RECALL_RESULT_SCHEMA = {
   required: ['id', 'content'] as string[],
 };
 
+const RELATION_OBJECT_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'string' as const },
+    source_id: { type: 'string' as const },
+    target_id: { type: 'string' as const },
+    relation_type: { type: 'string' as const },
+    metadata: { type: 'object' as const },
+  },
+  required: ['source_id', 'target_id', 'relation_type'] as string[],
+};
+
+const TAG_OBJECT_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    tag: { type: 'string' as const },
+    count: { type: 'number' as const },
+  },
+  required: ['tag', 'count'] as string[],
+};
+
+const NAMESPACE_OBJECT_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    namespace: { type: 'string' as const },
+    count: { type: 'number' as const },
+  },
+  required: ['namespace', 'count'] as string[],
+};
+
 const COMMON_FILTERS = {
   tags: { type: 'array' as const, items: { type: 'string' as const }, description: 'Filter by tags (memories must have ALL specified tags).' },
   namespace: { type: 'string' as const, description: 'Filter by namespace.' },
@@ -233,6 +263,14 @@ export const TOOLS = [
       },
       required: ['id'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        deleted: { type: 'boolean' as const },
+        id: { type: 'string' as const },
+      },
+      required: ['deleted', 'id'] as string[],
+    },
   },
   {
     name: 'memoclaw_bulk_delete',
@@ -250,6 +288,15 @@ export const TOOLS = [
         ids: { type: 'array', items: { type: 'string' }, description: 'Array of memory IDs to delete. Max 100.' },
       },
       required: ['ids'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        succeeded: { type: 'number' as const },
+        failed: { type: 'number' as const },
+        errors: { type: 'array' as const, items: { type: 'string' as const } },
+      },
+      required: ['succeeded', 'failed'] as string[],
     },
   },
   {
@@ -299,6 +346,15 @@ export const TOOLS = [
       openWorldHint: false,
     },
     inputSchema: { type: 'object' as const, properties: {} },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        wallet: { type: 'string' as const },
+        free_tier_remaining: { type: 'number' as const },
+        free_tier_total: { type: 'number' as const },
+      },
+      required: ['wallet', 'free_tier_remaining', 'free_tier_total'] as string[],
+    },
   },
   {
     name: 'memoclaw_ingest',
@@ -323,6 +379,14 @@ export const TOOLS = [
         auto_relate: { type: 'boolean', description: 'Auto-create relations between extracted facts. Default: true.' },
       },
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories_created: { type: 'number' as const },
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+      },
+      required: ['memories_created'] as string[],
+    },
   },
   {
     name: 'memoclaw_extract',
@@ -346,6 +410,13 @@ export const TOOLS = [
       },
       required: ['messages'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+        facts: { type: 'array' as const, items: { type: 'object' as const, properties: { content: { type: 'string' as const }, importance: { type: 'number' as const }, memory_type: { type: 'string' as const } } } },
+      },
+    },
   },
   {
     name: 'memoclaw_consolidate',
@@ -366,6 +437,14 @@ export const TOOLS = [
         min_similarity: { type: 'number', description: 'Minimum similarity for duplicates (0.0-1.0).' },
         mode: { type: 'string', description: 'Consolidation strategy/mode.' },
         dry_run: { type: 'boolean', description: 'If true, returns what WOULD be merged without actually merging.' },
+      },
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        merged: { type: 'number' as const },
+        deleted: { type: 'number' as const },
+        clusters: { type: 'array' as const, items: { type: 'object' as const, properties: { kept: { type: 'string' as const }, merged_ids: { type: 'array' as const, items: { type: 'string' as const } } } } },
       },
     },
   },
@@ -390,6 +469,13 @@ export const TOOLS = [
         category: { type: 'string', enum: ['stale', 'fresh', 'hot', 'decaying'], description: 'Filter by category.' },
       },
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        suggestions: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+      },
+      required: ['suggestions'] as string[],
+    },
   },
   {
     name: 'memoclaw_create_relation',
@@ -412,6 +498,13 @@ export const TOOLS = [
       },
       required: ['memory_id', 'target_id', 'relation_type'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        relation: RELATION_OBJECT_SCHEMA,
+      },
+      required: ['relation'] as string[],
+    },
   },
   {
     name: 'memoclaw_list_relations',
@@ -429,6 +522,13 @@ export const TOOLS = [
         memory_id: { type: 'string', description: 'Memory ID to list relations for.' },
       },
       required: ['memory_id'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        relations: { type: 'array' as const, items: RELATION_OBJECT_SCHEMA },
+      },
+      required: ['relations'] as string[],
     },
   },
   {
@@ -449,6 +549,14 @@ export const TOOLS = [
       },
       required: ['memory_id', 'relation_id'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        deleted: { type: 'boolean' as const },
+        relation_id: { type: 'string' as const },
+      },
+      required: ['deleted', 'relation_id'] as string[],
+    },
   },
   {
     name: 'memoclaw_export',
@@ -467,6 +575,14 @@ export const TOOLS = [
         agent_id: { type: 'string', description: 'Only export memories from this agent.' },
         format: { type: 'string', enum: ['json', 'jsonl'], description: 'Export format. Default: "json".' },
       },
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+        count: { type: 'number' as const },
+      },
+      required: ['memories', 'count'] as string[],
     },
   },
   {
@@ -505,6 +621,15 @@ export const TOOLS = [
       },
       required: ['memories'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        succeeded: { type: 'number' as const },
+        failed: { type: 'number' as const },
+        errors: { type: 'array' as const, items: { type: 'string' as const } },
+      },
+      required: ['succeeded', 'failed'] as string[],
+    },
   },
   {
     name: 'memoclaw_bulk_store',
@@ -542,6 +667,16 @@ export const TOOLS = [
         agent_id: { type: 'string', description: 'Agent ID applied to all memories.' },
       },
       required: ['memories'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        succeeded: { type: 'number' as const },
+        failed: { type: 'number' as const },
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+        errors: { type: 'array' as const, items: { type: 'string' as const } },
+      },
+      required: ['succeeded', 'failed'] as string[],
     },
   },
   {
@@ -591,6 +726,16 @@ export const TOOLS = [
       },
       required: ['namespace'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        deleted: { type: 'number' as const },
+        failed: { type: 'number' as const },
+        namespace: { type: 'string' as const },
+        errors: { type: 'array' as const, items: { type: 'string' as const } },
+      },
+      required: ['deleted', 'namespace'] as string[],
+    },
   },
   {
     name: 'memoclaw_init',
@@ -605,6 +750,18 @@ export const TOOLS = [
       openWorldHint: false,
     },
     inputSchema: { type: 'object' as const, properties: {} },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        healthy: { type: 'boolean' as const },
+        wallet: { type: 'string' as const },
+        api_url: { type: 'string' as const },
+        config_source: { type: 'string' as const },
+        free_tier_remaining: { type: 'number' as const },
+        free_tier_total: { type: 'number' as const },
+      },
+      required: ['healthy', 'wallet'] as string[],
+    },
   },
   {
     name: 'memoclaw_migrate',
@@ -641,6 +798,16 @@ export const TOOLS = [
         dry_run: { type: 'boolean', description: 'Preview without storing.' },
       },
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        files_processed: { type: 'number' as const },
+        memories_created: { type: 'number' as const },
+        duplicates_skipped: { type: 'number' as const },
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+      },
+      required: ['files_processed', 'memories_created'] as string[],
+    },
   },
   {
     name: 'memoclaw_graph',
@@ -662,6 +829,14 @@ export const TOOLS = [
       },
       required: ['memory_id'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        nodes: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+        edges: { type: 'array' as const, items: RELATION_OBJECT_SCHEMA },
+      },
+      required: ['nodes', 'edges'] as string[],
+    },
   },
   {
     name: 'memoclaw_pin',
@@ -678,6 +853,13 @@ export const TOOLS = [
       properties: { id: { type: 'string', description: 'The memory ID to pin.' } },
       required: ['id'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memory: MEMORY_OBJECT_SCHEMA,
+      },
+      required: ['memory'] as string[],
+    },
   },
   {
     name: 'memoclaw_unpin',
@@ -693,6 +875,13 @@ export const TOOLS = [
       type: 'object' as const,
       properties: { id: { type: 'string', description: 'The memory ID to unpin.' } },
       required: ['id'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memory: MEMORY_OBJECT_SCHEMA,
+      },
+      required: ['memory'] as string[],
     },
   },
   {
@@ -712,6 +901,13 @@ export const TOOLS = [
         agent_id: { type: 'string', description: 'Only list tags for this agent.' },
       },
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        tags: { type: 'array' as const, items: TAG_OBJECT_SCHEMA },
+      },
+      required: ['tags'] as string[],
+    },
   },
   {
     name: 'memoclaw_history',
@@ -728,6 +924,28 @@ export const TOOLS = [
       properties: { id: { type: 'string', description: 'The memory ID to view history for.' } },
       required: ['id'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        history: {
+          type: 'array' as const,
+          items: {
+            type: 'object' as const,
+            properties: {
+              content: { type: 'string' as const },
+              importance: { type: 'number' as const },
+              memory_type: { type: 'string' as const },
+              namespace: { type: 'string' as const },
+              tags: { type: 'array' as const, items: { type: 'string' as const } },
+              pinned: { type: 'boolean' as const },
+              changed_at: { type: 'string' as const },
+              changed_fields: { type: 'array' as const, items: { type: 'string' as const } },
+            },
+          },
+        },
+      },
+      required: ['history'] as string[],
+    },
   },
   {
     name: 'memoclaw_namespaces',
@@ -742,6 +960,13 @@ export const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: { agent_id: { type: 'string', description: 'Only list namespaces for this agent.' } },
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        namespaces: { type: 'array' as const, items: NAMESPACE_OBJECT_SCHEMA },
+      },
+      required: ['namespaces'] as string[],
     },
   },
   {
@@ -766,6 +991,13 @@ export const TOOLS = [
         agent_id: { type: 'string', description: 'Filter by agent.' },
       },
       required: ['query'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+      },
+      required: ['memories'] as string[],
     },
   },
   {
@@ -804,6 +1036,16 @@ export const TOOLS = [
       },
       required: ['updates'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        updated: { type: 'number' as const },
+        failed: { type: 'number' as const },
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+        errors: { type: 'array' as const, items: { type: 'string' as const } },
+      },
+      required: ['updated'] as string[],
+    },
   },
   {
     name: 'memoclaw_core_memories',
@@ -822,6 +1064,13 @@ export const TOOLS = [
         namespace: { type: 'string', description: 'Filter by namespace.' },
         agent_id: { type: 'string', description: 'Filter by agent.' },
       },
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+      },
+      required: ['memories'] as string[],
     },
   },
   {
