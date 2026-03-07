@@ -1,58 +1,69 @@
 # Changelog
 
-## 1.7.0
+All notable changes to this project will be documented in this file.
 
-### Features
-- **Config file auto-loading**: MCP server now auto-detects `~/.memoclaw/config.json` (created by `memoclaw init`). Resolution order: env var → config file → default. No more mandatory env vars after `memoclaw init`.
-- **`after` filter for `list` and `search`**: Both tools now support an `after` parameter to filter memories by creation date, matching `recall`'s existing capability.
-- **Better `memoclaw_init` output**: Shows config resolution source (env vs config file) and updated setup instructions mentioning `memoclaw init`.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Tests
-- Added 4 new tests: `search after filter`, `list after filter`, `list has after filter`, `search has after filter`, init config source display. Total: 98 tests.
-
-All notable changes to memoclaw-mcp will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-
-## [1.5.0] - 2026-02-13
+## [1.14.0] - 2026-03-07
 
 ### Added
-- `memoclaw_import` tool — restore memories from JSON backup (max 100 per call)
-- `memoclaw_graph` tool — BFS traversal of memory relation graph (depth 1-3)
-- `memoclaw_bulk_store` tool — store multiple memories in one call (max 50)
-- `memoclaw_count` tool — count memories with filters
-- `memoclaw_export` tool — export all memories as JSON/JSONL
-- `memoclaw_delete_namespace` tool — delete all memories in a namespace
-- 78 tests with comprehensive edge case coverage
+- Output schemas (MCP 2025-06-18) for all tools with `structuredContent` in responses
+- Resource links (`resource_link` content items) from mutation tools pointing to affected memories
+- Content annotations (`audience`, `priority`) on all tool responses per MCP spec
+- MCP Logging capability with syslog-level filtering via `logging/setLevel`
+- MCP Completions for `namespace`, `tag`, and `memory_type` arguments with caching
+- MCP Prompts: `review-memories`, `load-context`, `memory-report`, `migrate-files`
+- MCP Resources: `memoclaw://stats`, `memoclaw://namespaces`, `memoclaw://core-memories`
+- Resource templates: `memoclaw://memories/{id}`, `memoclaw://namespaces/{namespace}`, `memoclaw://tags/{tag}`
+- Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`)
+- `memoclaw_graph` tool for traversing the memory knowledge graph
+- `memoclaw_context` tool for GPT-4o-mini powered contextual recall
+- `memoclaw_batch_update` tool for updating multiple memories at once
+- `memoclaw_core_memories` tool for retrieving high-importance memories
+- `memoclaw_stats` tool for memory usage statistics
+- `memoclaw_tags` tool for listing unique tags with counts
+- `memoclaw_namespaces` tool for listing namespaces with counts
+- `memoclaw_history` tool for viewing memory edit history
+- `memoclaw_pin` / `memoclaw_unpin` shortcut tools
+- `memoclaw_count` tool with smart fallback pagination
+- `memoclaw_migrate` tool with file/directory path support and ingest fallback
+- `memoclaw_search` tool for keyword/exact text matching
+- `memoclaw_suggested` tool for proactive memory suggestions
+- Streamable HTTP transport (`--http` flag or `MEMOCLAW_TRANSPORT=http`)
+- HTTP session management with configurable TTL (`MEMOCLAW_SESSION_TTL_MS`)
+- Bearer token authentication for HTTP transport (`MEMOCLAW_HTTP_TOKEN`)
+- Origin validation for HTTP transport to prevent DNS rebinding attacks
+- Health check endpoint (`GET /health`)
+- Configurable request timeout (`MEMOCLAW_TIMEOUT`) and retry count (`MEMOCLAW_MAX_RETRIES`)
+- Exponential backoff with jitter for transient failure retries
+- Client-side validation: content length (8192 chars), importance range (0-1)
+- Immutable memory support (`immutable` flag)
+- `--version` and `--help` CLI flags
+- Comprehensive test suite (400+ tests)
+- CI workflow for Node.js 18, 20, 22
+- npm publish workflow on version tags
+- CHANGELOG.md
+
+### Changed
+- Refactored monolithic handler into domain modules (`memory`, `recall`, `relations`, `admin`)
+- Handler functions now use typed argument interfaces instead of `any`
+- Version is read from package.json at startup (no hardcoded duplication)
 
 ### Fixed
-- `formatMemory` crash on non-numeric similarity values
-- `formatMemory` null/missing memory safety
-- `memoclaw_update` leaked arbitrary fields to API; now whitelists allowed fields
-- `memoclaw_update` no-op detection (errors when no valid fields provided)
-- `memoclaw_list` missing `memory_type` filter
-- `memoclaw_suggested` raw JSON output; now formatted
-- `memoclaw_bulk_store` field leaking (now whitelists allowed fields per memory)
+- `memoclaw_count` fallback pagination capped at 10,000 memories (was 100,000)
+- README: `memoclaw_bulk_store` max corrected from 50 to 100
 
-### Improved
-- All tool descriptions rewritten for clarity
-- `formatMemory` shows `expires_at` and `updated_at`
-- Update response includes formatted memory details
-
-## [1.2.0] - 2026-02-13
+## [1.0.0] - 2026-01-15
 
 ### Added
-- `memoclaw_ingest` tool — zero-effort conversation ingestion
-- `memoclaw_extract` tool — LLM fact extraction
-- `memoclaw_consolidate` tool — merge similar memories
-- `memoclaw_suggested` tool — proactive memory suggestions
-- `memoclaw_update` tool — update memories by ID
-- `memoclaw_create_relation` / `memoclaw_list_relations` tools
-- `memoclaw_status` tool — check free tier remaining calls
-- Free tier wallet auth (try free tier before x402 payment)
-
-## [1.0.0] - 2026-02-09
-
-### Added
-- Initial release with store, recall, list, delete tools
-- x402 payment support (USDC on Base)
+- Initial release
+- `memoclaw_store`, `memoclaw_recall`, `memoclaw_list`, `memoclaw_get`, `memoclaw_delete`, `memoclaw_update` tools
+- `memoclaw_bulk_store`, `memoclaw_bulk_delete`, `memoclaw_import`, `memoclaw_export` bulk tools
+- `memoclaw_ingest`, `memoclaw_extract`, `memoclaw_consolidate` AI tools
+- `memoclaw_create_relation`, `memoclaw_list_relations`, `memoclaw_delete_relation` graph tools
+- `memoclaw_delete_namespace` admin tool
+- `memoclaw_status`, `memoclaw_init` utility tools
+- x402 payment support (automatic after free tier)
+- Config loading from env vars and `~/.memoclaw/config.json`
+- stdio transport

@@ -93,7 +93,7 @@ Configure your MCP client to connect to `http://localhost:3100/mcp`.
 
 | Tool | Description |
 |------|-------------|
-| `memoclaw_bulk_store` | Store up to 50 memories in one call |
+| `memoclaw_bulk_store` | Store up to 100 memories in one call |
 | `memoclaw_bulk_delete` | Delete up to 100 memories in one call |
 | `memoclaw_batch_update` | Update up to 50 memories in one call |
 | `memoclaw_import` | Import memories from a JSON array |
