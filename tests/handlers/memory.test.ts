@@ -89,6 +89,15 @@ describe('handleMemory', () => {
       const result = await handleMemory(ctx, 'memoclaw_list', {});
       expect(result!.content[0].text).toContain('0 of 0');
     });
+
+    it('passes before filter as query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories': { memories: [], total: 0 },
+      });
+      await handleMemory(ctx, 'memoclaw_list', { before: '2025-06-01T00:00:00Z' });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('before=2025-06-01T00%3A00%3A00Z');
+    });
   });
 
   // ── update ───────────────────────────────────────────────────────────────
@@ -111,6 +120,15 @@ describe('handleMemory', () => {
       const { ctx } = makeCtx();
       await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', bad_field: 'x' }))
         .rejects.toThrow('No valid update fields');
+    });
+
+    it('passes metadata field to API', async () => {
+      const { ctx, api } = makeCtx({
+        'PATCH /v1/memories/': { memory: { id: '1', content: 'test' } },
+      });
+      await handleMemory(ctx, 'memoclaw_update', { id: '1', metadata: { key: 'val' } });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.metadata).toEqual({ key: 'val' });
     });
   });
 

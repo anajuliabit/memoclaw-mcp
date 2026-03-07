@@ -54,6 +54,7 @@ const COMMON_FILTERS = {
   session_id: { type: 'string' as const, description: 'Filter by session ID.' },
   agent_id: { type: 'string' as const, description: 'Filter by agent ID.' },
   after: { type: 'string' as const, description: 'Only return memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".' },
+  before: { type: 'string' as const, description: 'Only return memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".' },
 };
 
 export const TOOLS = [

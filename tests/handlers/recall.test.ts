@@ -47,6 +47,29 @@ describe('handleRecall', () => {
       expect(body.namespace).toBe('ns');
       expect(body.limit).toBe(5);
     });
+
+    it('passes before filter to API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', {
+        query: 'test', before: '2025-06-01T00:00:00Z',
+      });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters.before).toBe('2025-06-01T00:00:00Z');
+    });
+
+    it('passes both after and before filters to API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', {
+        query: 'test', after: '2025-01-01T00:00:00Z', before: '2025-06-01T00:00:00Z',
+      });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters.after).toBe('2025-01-01T00:00:00Z');
+      expect(body.filters.before).toBe('2025-06-01T00:00:00Z');
+    });
   });
 
   describe('memoclaw_search', () => {
@@ -62,6 +85,15 @@ describe('handleRecall', () => {
       const { ctx } = makeCtx();
       await expect(handleRecall(ctx, 'memoclaw_search', { query: '  ' }))
         .rejects.toThrow('query is required');
+    });
+
+    it('passes before filter as query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories/search': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_search', { query: 'test', before: '2025-12-31T00:00:00Z' });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('before=2025-12-31T00%3A00%3A00Z');
     });
   });
 
