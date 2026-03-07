@@ -16,13 +16,19 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const data = await makeRequest('GET', '/v1/free-tier/status');
       const remaining = data.free_tier_remaining ?? 'unknown';
       const total = data.free_tier_total ?? 100;
+      const wallet = data.wallet || account.address;
       const pct = typeof remaining === 'number' ? Math.round((remaining / total) * 100) : '?';
-      return { content: [userText(`Wallet: ${data.wallet || account.address}\nFree tier: ${remaining}/${total} calls remaining (${pct}%)`, 0.5)] };
+      return {
+        content: [userText(`Wallet: ${wallet}\nFree tier: ${remaining}/${total} calls remaining (${pct}%)`, 0.5)],
+        structuredContent: { wallet, free_tier_remaining: remaining, free_tier_total: total },
+      };
     }
 
     case 'memoclaw_init': {
       const checks: string[] = [];
       let healthy = true;
+      let freeTierRemaining: number | undefined;
+      let freeTierTotal: number | undefined;
       checks.push(`✅ Private key loaded (source: ${config.configSource})`);
       checks.push(`📍 API URL: ${config.apiUrl}`);
       checks.push(`👛 Wallet: ${account.address}`);
@@ -30,6 +36,8 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const data = await makeRequest('GET', '/v1/free-tier/status');
         const remaining = data.free_tier_remaining ?? 'unknown';
         const total = data.free_tier_total ?? 100;
+        freeTierRemaining = typeof remaining === 'number' ? remaining : undefined;
+        freeTierTotal = typeof total === 'number' ? total : undefined;
         checks.push(`✅ API reachable`);
         checks.push(`📊 Free tier: ${remaining}/${total} calls remaining`);
         if (typeof remaining === 'number' && remaining <= 0) {
@@ -45,7 +53,18 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         checks.push(`   4. Restart the MCP server`);
       }
       const status = healthy ? '🟢 MemoClaw is ready!' : '🔴 MemoClaw needs configuration';
-      return { content: [userText(`${status}\n\n${checks.join('\n')}`, healthy ? 0.5 : 1.0)] };
+      const structured: Record<string, unknown> = {
+        healthy,
+        wallet: account.address,
+        api_url: config.apiUrl,
+        config_source: config.configSource,
+      };
+      if (freeTierRemaining !== undefined) structured.free_tier_remaining = freeTierRemaining;
+      if (freeTierTotal !== undefined) structured.free_tier_total = freeTierTotal;
+      return {
+        content: [userText(`${status}\n\n${checks.join('\n')}`, healthy ? 0.5 : 1.0)],
+        structuredContent: structured,
+      };
     }
 
     case 'memoclaw_ingest': {
@@ -54,16 +73,19 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('POST', '/v1/ingest', {
         messages, text, namespace, session_id, agent_id, auto_relate: auto_relate !== false,
       });
-      const count = result.memories_created ?? result.count ?? '?';
+      const memoriesCreated = result.memories_created ?? result.count ?? 0;
       const memories = result.memories || result.data || [];
       const resourceLinks = memories
         .filter((m: any) => m.id)
         .map((m: any) => memoryResourceLink(m.id, 'Ingested memory'));
-      return { content: [
-        userAndAssistantText(`📥 Ingested: ${count} memories created`),
-        assistantText(JSON.stringify(result, null, 2)),
-        ...resourceLinks,
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`📥 Ingested: ${memoriesCreated} memories created`),
+          assistantText(JSON.stringify(result, null, 2)),
+          ...resourceLinks,
+        ],
+        structuredContent: { memories_created: memoriesCreated, memories },
+      };
     }
 
     case 'memoclaw_extract': {
@@ -72,7 +94,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         throw new Error('messages is required and must be a non-empty array');
       }
       const result = await makeRequest('POST', '/v1/memories/extract', { messages, namespace, session_id, agent_id });
-      return { content: [assistantText(JSON.stringify(result, null, 2))] };
+      return {
+        content: [assistantText(JSON.stringify(result, null, 2))],
+        structuredContent: result,
+      };
     }
 
     case 'memoclaw_consolidate': {
@@ -85,10 +110,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       if (dry_run !== undefined) body.dry_run = dry_run;
       const result = await makeRequest('POST', '/v1/memories/consolidate', body);
       const prefix = dry_run ? '🔍 Consolidation preview (dry run)' : '✅ Consolidation complete';
-      return { content: [
-        userAndAssistantText(prefix),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(prefix),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: result,
+      };
     }
 
     case 'memoclaw_export': {
@@ -105,10 +133,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const output = fmt === 'jsonl'
           ? list.map((m: any) => JSON.stringify(m)).join('\n')
           : JSON.stringify(list, null, 2);
-        return { content: [
-          userAndAssistantText(`📦 Exported ${list.length} memories`),
-          assistantText(output),
-        ] };
+        return {
+          content: [
+            userAndAssistantText(`📦 Exported ${list.length} memories`),
+            assistantText(output),
+          ],
+          structuredContent: { memories: list, count: list.length },
+        };
       } catch (exportErr: any) {
         // Only fall back to pagination if /v1/export is not found (404)
         if (!exportErr.message?.includes('404') && !exportErr.message?.includes('Not Found')) {
@@ -133,10 +164,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const output = fmt === 'jsonl'
           ? allMemories.map((m: any) => JSON.stringify(m)).join('\n')
           : JSON.stringify(allMemories, null, 2);
-        return { content: [
-          userAndAssistantText(`📦 Exported ${allMemories.length} memories`),
-          assistantText(output),
-        ] };
+        return {
+          content: [
+            userAndAssistantText(`📦 Exported ${allMemories.length} memories`),
+            assistantText(output),
+          ],
+          structuredContent: { memories: allMemories, count: allMemories.length },
+        };
       }
     }
 
@@ -195,15 +229,21 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const resourceLinks = migratedMemories
           .filter((m: any) => m.id)
           .map((m: any) => memoryResourceLink(m.id, 'Migrated memory'));
-        return { content: [
-          userAndAssistantText(`${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}`),
-          assistantText(JSON.stringify(result, null, 2)),
-          ...resourceLinks,
-        ] };
+        return {
+          content: [
+            userAndAssistantText(`${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}`),
+            assistantText(JSON.stringify(result, null, 2)),
+            ...resourceLinks,
+          ],
+          structuredContent: { files_processed: fileList.length, memories_created: typeof created === 'number' ? created : 0, duplicates_skipped: skipped, memories: migratedMemories },
+        };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
           if (dry_run) {
-            return { content: [userAndAssistantText(`🔍 Migration preview (dry run — /v1/migrate not available, would use ingest fallback)\n\n📁 ${fileList.length} files would be ingested:\n${fileList.map(f => `  • ${f.filename} (${f.content.length} chars)`).join('\n')}`)] };
+            return {
+              content: [userAndAssistantText(`🔍 Migration preview (dry run — /v1/migrate not available, would use ingest fallback)\n\n📁 ${fileList.length} files would be ingested:\n${fileList.map(f => `  • ${f.filename} (${f.content.length} chars)`).join('\n')}`)],
+              structuredContent: { files_processed: fileList.length, memories_created: 0, duplicates_skipped: 0, memories: [] },
+            };
           }
           let totalCreated = 0;
           const errors: string[] = [];
@@ -221,7 +261,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           }
           let text = `✅ Migration complete (via ingest fallback)\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${totalCreated}`;
           if (errors.length > 0) text += `\n\n❌ Errors:\n${errors.join('\n')}`;
-          return { content: [userAndAssistantText(text)] };
+          return {
+            content: [userAndAssistantText(text)],
+            structuredContent: { files_processed: fileList.length, memories_created: totalCreated, duplicates_skipped: 0, memories: [] },
+          };
         }
         throw err;
       }
@@ -268,7 +311,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
       let text = `🗑️ Namespace "${namespace}": ${deletedIds.length} memories deleted`;
       if (errors.length > 0) text += `, ${errors.length} failed\n\nErrors:\n${errors.slice(0, 10).join('\n')}`;
-      return { content: [userAndAssistantText(text)] };
+      return {
+        content: [userAndAssistantText(text)],
+        structuredContent: { deleted: deletedIds.length, failed: errors.length, namespace, errors: errors.slice(0, 10) },
+      };
     }
 
     case 'memoclaw_tags': {
@@ -281,11 +327,12 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const result = await makeRequest('GET', `/v1/tags${qs ? '?' + qs : ''}`);
         if (result.tags) {
           const tags = result.tags;
-          if (tags.length === 0) return { content: [userText('No tags found across memories.', 0.3)] };
-          const lines = tags.map((t: any) =>
-            typeof t === 'string' ? `  • ${t}` : `  • ${t.tag || t.name}: ${t.count} memories`
+          if (tags.length === 0) return { content: [userText('No tags found across memories.', 0.3)], structuredContent: { tags: [] } };
+          const normalized = tags.map((t: any) =>
+            typeof t === 'string' ? { tag: t, count: 0 } : { tag: t.tag || t.name, count: t.count ?? 0 }
           );
-          return { content: [userText(`🏷️ ${tags.length} tags:\n\n${lines.join('\n')}`, 0.5)] };
+          const lines = normalized.map((t: any) => `  • ${t.tag}: ${t.count} memories`);
+          return { content: [userText(`🏷️ ${tags.length} tags:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { tags: normalized } };
         }
       } catch { /* fall through to client-side */ }
 
@@ -308,10 +355,11 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (memories.length < pageSize) break;
         offset += pageSize;
       }
-      if (tagCounts.size === 0) return { content: [userText('No tags found across memories.', 0.3)] };
+      if (tagCounts.size === 0) return { content: [userText('No tags found across memories.', 0.3)], structuredContent: { tags: [] } };
       const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
+      const normalizedTags = sorted.map(([tag, count]) => ({ tag, count }));
       const lines = sorted.map(([tag, count]) => `  • ${tag}: ${count} memories`);
-      return { content: [userText(`🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}`, 0.5)] };
+      return { content: [userText(`🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { tags: normalizedTags } };
     }
 
     case 'memoclaw_history': {
@@ -320,7 +368,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('GET', `/v1/memories/${id}/history`);
       const history = result.history || result.versions || result.data || [];
       if (history.length === 0) {
-        return { content: [userText(`No edit history found for memory ${id}.`, 0.3)] };
+        return { content: [userText(`No edit history found for memory ${id}.`, 0.3)], structuredContent: { history: [] } };
       }
       const formatted = history.map((entry: any, i: number) => {
         const parts = [`Version ${i + 1}`];
@@ -336,10 +384,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (entry.changed_fields) parts.push(`  changed: ${Array.isArray(entry.changed_fields) ? entry.changed_fields.join(', ') : entry.changed_fields}`);
         return parts.join('\n');
       }).join('\n\n');
-      return { content: [
-        userAndAssistantText(`📜 History for memory ${id} (${history.length} versions):\n\n${formatted}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`📜 History for memory ${id} (${history.length} versions):\n\n${formatted}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { history },
+      };
     }
 
     case 'memoclaw_namespaces': {
@@ -351,11 +402,12 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const result = await makeRequest('GET', `/v1/namespaces${qs ? '?' + qs : ''}`);
         if (result.namespaces) {
           const namespaces = result.namespaces;
-          if (namespaces.length === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)] };
-          const lines = namespaces.map((n: any) =>
-            typeof n === 'string' ? `  • ${n}` : `  • ${n.namespace || n.name || '(default)'}: ${n.count} memories`
+          if (namespaces.length === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)], structuredContent: { namespaces: [] } };
+          const normalized = namespaces.map((n: any) =>
+            typeof n === 'string' ? { namespace: n, count: 0 } : { namespace: n.namespace || n.name || '(default)', count: n.count ?? 0 }
           );
-          return { content: [userText(`📁 ${namespaces.length} namespaces:\n\n${lines.join('\n')}`, 0.5)] };
+          const lines = normalized.map((n: any) => `  • ${n.namespace}: ${n.count} memories`);
+          return { content: [userText(`📁 ${namespaces.length} namespaces:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { namespaces: normalized } };
         }
       } catch { /* fall through */ }
 
@@ -377,10 +429,11 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (memories.length < pageSize) break;
         offset += pageSize;
       }
-      if (nsCounts.size === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)] };
+      if (nsCounts.size === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)], structuredContent: { namespaces: [] } };
       const sorted = [...nsCounts.entries()].sort((a, b) => b[1] - a[1]);
+      const normalizedNs = sorted.map(([ns, count]) => ({ namespace: ns, count }));
       const lines = sorted.map(([ns, count]) => `  • ${ns}: ${count} memories`);
-      return { content: [userText(`📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}`, 0.5)] };
+      return { content: [userText(`📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { namespaces: normalizedNs } };
     }
 
     case 'memoclaw_core_memories': {
@@ -393,13 +446,16 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('GET', `/v1/core-memories${qs ? '?' + qs : ''}`);
       const memories = result.memories || result.core_memories || result.data || [];
       if (memories.length === 0) {
-        return { content: [userText('No core memories found. Store important memories with high importance scores or pin them.', 0.3)] };
+        return { content: [userText('No core memories found. Store important memories with high importance scores or pin them.', 0.3)], structuredContent: { memories: [] } };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [
-        userAndAssistantText(`⭐ ${memories.length} core memories:\n\n${formatted}`),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userAndAssistantText(`⭐ ${memories.length} core memories:\n\n${formatted}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: { memories },
+      };
     }
 
     case 'memoclaw_stats': {
