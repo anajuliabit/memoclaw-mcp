@@ -7,7 +7,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
 
   switch (name) {
     case 'memoclaw_recall': {
-      const { query, limit, min_similarity, tags, namespace, memory_type, session_id, agent_id, include_relations, after } = args as RecallArgs;
+      const { query, limit, min_similarity, tags, namespace, memory_type, session_id, agent_id, include_relations, after, before } = args as RecallArgs;
       if (!query || (typeof query === 'string' && query.trim() === '')) {
         throw new Error('query is required and cannot be empty');
       }
@@ -15,6 +15,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (tags) filters.tags = tags;
       if (memory_type) filters.memory_type = memory_type;
       if (after) filters.after = after;
+      if (before) filters.before = before;
       const result = await makeRequest('POST', '/v1/recall', {
         query, limit, min_similarity,
         filters: Object.keys(filters).length > 0 ? filters : undefined,
@@ -35,7 +36,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_search': {
-      const { query, limit, namespace, tags, memory_type, session_id, agent_id, after } = args as SearchArgs;
+      const { query, limit, namespace, tags, memory_type, session_id, agent_id, after, before } = args as SearchArgs;
       if (!query || (typeof query === 'string' && query.trim() === '')) {
         throw new Error('query is required and cannot be empty');
       }
@@ -48,6 +49,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (session_id) params.set('session_id', session_id);
       if (agent_id) params.set('agent_id', agent_id);
       if (after) params.set('after', after);
+      if (before) params.set('before', before);
       const result = await makeRequest('GET', `/v1/memories/search?${params}`);
       const memories = result.memories || result.data || [];
       if (memories.length === 0) {

@@ -31,6 +31,7 @@ export interface RecallArgs {
   agent_id?: string;
   include_relations?: boolean;
   after?: string;
+  before?: string;
 }
 
 export interface SearchArgs {
@@ -42,6 +43,7 @@ export interface SearchArgs {
   session_id?: string;
   agent_id?: string;
   after?: string;
+  before?: string;
 }
 
 export interface GetArgs {
@@ -57,6 +59,7 @@ export interface ListArgs {
   session_id?: string;
   agent_id?: string;
   after?: string;
+  before?: string;
 }
 
 export interface DeleteArgs {
@@ -74,6 +77,7 @@ export interface UpdateArgs {
   tags?: string[];
   namespace?: string;
   memory_type?: string;
+  metadata?: Record<string, unknown>;
   pinned?: boolean;
   immutable?: boolean;
   expires_at?: string;
@@ -89,6 +93,7 @@ export interface BatchUpdateEntry {
   tags?: string[];
   namespace?: string;
   memory_type?: string;
+  metadata?: Record<string, unknown>;
   pinned?: boolean;
   immutable?: boolean;
   expires_at?: string;

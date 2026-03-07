@@ -54,7 +54,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_list': {
-      const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after } = args as ListArgs;
+      const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after, before } = args as ListArgs;
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (offset !== undefined) params.set('offset', String(offset));
@@ -64,6 +64,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       if (session_id) params.set('session_id', session_id);
       if (agent_id) params.set('agent_id', agent_id);
       if (after) params.set('after', after);
+      if (before) params.set('before', before);
       const result = await makeRequest('GET', `/v1/memories?${params}`);
       const memories = result.memories || result.data || [];
       const total = result.total ?? memories.length;

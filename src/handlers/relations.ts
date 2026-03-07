@@ -1,4 +1,4 @@
-import { formatMemory, userAndAssistantText, assistantText, userText } from '../format.js';
+import { formatMemory, withConcurrency, userAndAssistantText, assistantText, userText } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { CreateRelationArgs, ListRelationsArgs, DeleteRelationArgs, GraphArgs } from '../types.js';
 
@@ -58,26 +58,42 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
 
       for (let d = 0; d <= depth && frontier.length > 0; d++) {
         const nextFrontier: string[] = [];
-        for (const mid of frontier) {
-          if (visited.has(mid)) continue;
-          visited.add(mid);
-          try {
-            const mem = await makeRequest('GET', `/v1/memories/${mid}`);
-            nodes.push(mem.memory || mem);
-          } catch {
-            nodes.push({ id: mid, content: '(could not fetch)' });
-          }
-          if (d < depth) {
-            try {
-              const relResult = await makeRequest('GET', `/v1/memories/${mid}/relations`);
-              const relations = relResult.relations || [];
-              for (const r of relations) {
-                if (relation_type && r.relation_type !== relation_type) continue;
-                edges.push(r);
-                const neighbor = r.target_id === mid ? r.source_id : r.target_id;
+        const unvisited = frontier.filter(mid => !visited.has(mid));
+        if (unvisited.length === 0) break;
+        for (const mid of unvisited) visited.add(mid);
+
+        // Fetch all memories at this depth level in parallel
+        const memResults = await withConcurrency(
+          unvisited.map(mid => () =>
+            makeRequest('GET', `/v1/memories/${mid}`)
+              .then(mem => ({ id: mid, data: mem.memory || mem }))
+              .catch(() => ({ id: mid, data: { id: mid, content: '(could not fetch)' } }))
+          ),
+          10
+        );
+        for (const r of memResults) {
+          if (r.status === 'fulfilled') nodes.push(r.value.data);
+        }
+
+        // Fetch all relations at this depth level in parallel
+        if (d < depth) {
+          const relResults = await withConcurrency(
+            unvisited.map(mid => () =>
+              makeRequest('GET', `/v1/memories/${mid}/relations`)
+                .then(relResult => ({ id: mid, relations: relResult.relations || [] }))
+                .catch(() => ({ id: mid, relations: [] as any[] }))
+            ),
+            10
+          );
+          for (const r of relResults) {
+            if (r.status === 'fulfilled') {
+              for (const rel of r.value.relations) {
+                if (relation_type && rel.relation_type !== relation_type) continue;
+                edges.push(rel);
+                const neighbor = rel.target_id === r.value.id ? rel.source_id : rel.target_id;
                 if (neighbor && !visited.has(neighbor)) nextFrontier.push(neighbor);
               }
-            } catch { /* no relations */ }
+            }
           }
         }
         frontier = nextFrontier;
