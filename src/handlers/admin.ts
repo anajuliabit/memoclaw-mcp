@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
-import { formatMemory, withConcurrency, validateContentLength, validateImportance } from '../format.js';
+import { formatMemory, withConcurrency, validateContentLength, validateImportance, userAndAssistantText, assistantText, userText } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   StatusArgs, InitArgs, IngestArgs, ExtractArgs, ConsolidateArgs,
@@ -17,7 +17,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const remaining = data.free_tier_remaining ?? 'unknown';
       const total = data.free_tier_total ?? 100;
       const pct = typeof remaining === 'number' ? Math.round((remaining / total) * 100) : '?';
-      return { content: [{ type: 'text', text: `Wallet: ${data.wallet || account.address}\nFree tier: ${remaining}/${total} calls remaining (${pct}%)` }] };
+      return { content: [userText(`Wallet: ${data.wallet || account.address}\nFree tier: ${remaining}/${total} calls remaining (${pct}%)`, 0.5)] };
     }
 
     case 'memoclaw_init': {
@@ -45,7 +45,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         checks.push(`   4. Restart the MCP server`);
       }
       const status = healthy ? '🟢 MemoClaw is ready!' : '🔴 MemoClaw needs configuration';
-      return { content: [{ type: 'text', text: `${status}\n\n${checks.join('\n')}` }] };
+      return { content: [userText(`${status}\n\n${checks.join('\n')}`, healthy ? 0.5 : 1.0)] };
     }
 
     case 'memoclaw_ingest': {
@@ -55,7 +55,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         messages, text, namespace, session_id, agent_id, auto_relate: auto_relate !== false,
       });
       const count = result.memories_created ?? result.count ?? '?';
-      return { content: [{ type: 'text', text: `📥 Ingested: ${count} memories created\n\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(`📥 Ingested: ${count} memories created`),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     case 'memoclaw_extract': {
@@ -64,7 +67,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         throw new Error('messages is required and must be a non-empty array');
       }
       const result = await makeRequest('POST', '/v1/memories/extract', { messages, namespace, session_id, agent_id });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return { content: [assistantText(JSON.stringify(result, null, 2))] };
     }
 
     case 'memoclaw_consolidate': {
@@ -77,7 +80,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       if (dry_run !== undefined) body.dry_run = dry_run;
       const result = await makeRequest('POST', '/v1/memories/consolidate', body);
       const prefix = dry_run ? '🔍 Consolidation preview (dry run)' : '✅ Consolidation complete';
-      return { content: [{ type: 'text', text: `${prefix}\n\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(prefix),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     case 'memoclaw_export': {
@@ -94,7 +100,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const output = fmt === 'jsonl'
           ? list.map((m: any) => JSON.stringify(m)).join('\n')
           : JSON.stringify(list, null, 2);
-        return { content: [{ type: 'text', text: `📦 Exported ${list.length} memories\n\n${output}` }] };
+        return { content: [
+          userAndAssistantText(`📦 Exported ${list.length} memories`),
+          assistantText(output),
+        ] };
       } catch (exportErr: any) {
         // Only fall back to pagination if /v1/export is not found (404)
         if (!exportErr.message?.includes('404') && !exportErr.message?.includes('Not Found')) {
@@ -119,7 +128,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const output = fmt === 'jsonl'
           ? allMemories.map((m: any) => JSON.stringify(m)).join('\n')
           : JSON.stringify(allMemories, null, 2);
-        return { content: [{ type: 'text', text: `📦 Exported ${allMemories.length} memories\n\n${output}` }] };
+        return { content: [
+          userAndAssistantText(`📦 Exported ${allMemories.length} memories`),
+          assistantText(output),
+        ] };
       }
     }
 
@@ -158,7 +170,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       }
 
       if (fileList.length === 0) {
-        return { content: [{ type: 'text', text: '⚠️ No .md or .txt files found at the given path.' }] };
+        return { content: [userText('⚠️ No .md or .txt files found at the given path.', 0.7)] };
       }
 
       const body: any = {
@@ -174,11 +186,14 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const prefix = dry_run ? '🔍 Migration preview (dry run)' : '✅ Migration complete';
         const created = result.memories_created ?? result.count ?? '?';
         const skipped = result.duplicates_skipped ?? 0;
-        return { content: [{ type: 'text', text: `${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}\n\n${JSON.stringify(result, null, 2)}` }] };
+        return { content: [
+          userAndAssistantText(`${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}`),
+          assistantText(JSON.stringify(result, null, 2)),
+        ] };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
           if (dry_run) {
-            return { content: [{ type: 'text', text: `🔍 Migration preview (dry run — /v1/migrate not available, would use ingest fallback)\n\n📁 ${fileList.length} files would be ingested:\n${fileList.map(f => `  • ${f.filename} (${f.content.length} chars)`).join('\n')}` }] };
+            return { content: [userAndAssistantText(`🔍 Migration preview (dry run — /v1/migrate not available, would use ingest fallback)\n\n📁 ${fileList.length} files would be ingested:\n${fileList.map(f => `  • ${f.filename} (${f.content.length} chars)`).join('\n')}`)] };
           }
           let totalCreated = 0;
           const errors: string[] = [];
@@ -196,7 +211,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           }
           let text = `✅ Migration complete (via ingest fallback)\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${totalCreated}`;
           if (errors.length > 0) text += `\n\n❌ Errors:\n${errors.join('\n')}`;
-          return { content: [{ type: 'text', text }] };
+          return { content: [userAndAssistantText(text)] };
         }
         throw err;
       }
@@ -243,7 +258,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
       let text = `🗑️ Namespace "${namespace}": ${deletedIds.length} memories deleted`;
       if (errors.length > 0) text += `, ${errors.length} failed\n\nErrors:\n${errors.slice(0, 10).join('\n')}`;
-      return { content: [{ type: 'text', text }] };
+      return { content: [userAndAssistantText(text)] };
     }
 
     case 'memoclaw_tags': {
@@ -256,11 +271,11 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const result = await makeRequest('GET', `/v1/tags${qs ? '?' + qs : ''}`);
         if (result.tags) {
           const tags = result.tags;
-          if (tags.length === 0) return { content: [{ type: 'text', text: 'No tags found across memories.' }] };
+          if (tags.length === 0) return { content: [userText('No tags found across memories.', 0.3)] };
           const lines = tags.map((t: any) =>
             typeof t === 'string' ? `  • ${t}` : `  • ${t.tag || t.name}: ${t.count} memories`
           );
-          return { content: [{ type: 'text', text: `🏷️ ${tags.length} tags:\n\n${lines.join('\n')}` }] };
+          return { content: [userText(`🏷️ ${tags.length} tags:\n\n${lines.join('\n')}`, 0.5)] };
         }
       } catch { /* fall through to client-side */ }
 
@@ -283,10 +298,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (memories.length < pageSize) break;
         offset += pageSize;
       }
-      if (tagCounts.size === 0) return { content: [{ type: 'text', text: 'No tags found across memories.' }] };
+      if (tagCounts.size === 0) return { content: [userText('No tags found across memories.', 0.3)] };
       const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
       const lines = sorted.map(([tag, count]) => `  • ${tag}: ${count} memories`);
-      return { content: [{ type: 'text', text: `🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}` }] };
+      return { content: [userText(`🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}`, 0.5)] };
     }
 
     case 'memoclaw_history': {
@@ -295,7 +310,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('GET', `/v1/memories/${id}/history`);
       const history = result.history || result.versions || result.data || [];
       if (history.length === 0) {
-        return { content: [{ type: 'text', text: `No edit history found for memory ${id}.` }] };
+        return { content: [userText(`No edit history found for memory ${id}.`, 0.3)] };
       }
       const formatted = history.map((entry: any, i: number) => {
         const parts = [`Version ${i + 1}`];
@@ -311,7 +326,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (entry.changed_fields) parts.push(`  changed: ${Array.isArray(entry.changed_fields) ? entry.changed_fields.join(', ') : entry.changed_fields}`);
         return parts.join('\n');
       }).join('\n\n');
-      return { content: [{ type: 'text', text: `📜 History for memory ${id} (${history.length} versions):\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(`📜 History for memory ${id} (${history.length} versions):\n\n${formatted}`),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     case 'memoclaw_namespaces': {
@@ -323,11 +341,11 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const result = await makeRequest('GET', `/v1/namespaces${qs ? '?' + qs : ''}`);
         if (result.namespaces) {
           const namespaces = result.namespaces;
-          if (namespaces.length === 0) return { content: [{ type: 'text', text: 'No memories found — no namespaces to list.' }] };
+          if (namespaces.length === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)] };
           const lines = namespaces.map((n: any) =>
             typeof n === 'string' ? `  • ${n}` : `  • ${n.namespace || n.name || '(default)'}: ${n.count} memories`
           );
-          return { content: [{ type: 'text', text: `📁 ${namespaces.length} namespaces:\n\n${lines.join('\n')}` }] };
+          return { content: [userText(`📁 ${namespaces.length} namespaces:\n\n${lines.join('\n')}`, 0.5)] };
         }
       } catch { /* fall through */ }
 
@@ -349,10 +367,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (memories.length < pageSize) break;
         offset += pageSize;
       }
-      if (nsCounts.size === 0) return { content: [{ type: 'text', text: 'No memories found — no namespaces to list.' }] };
+      if (nsCounts.size === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)] };
       const sorted = [...nsCounts.entries()].sort((a, b) => b[1] - a[1]);
       const lines = sorted.map(([ns, count]) => `  • ${ns}: ${count} memories`);
-      return { content: [{ type: 'text', text: `📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}` }] };
+      return { content: [userText(`📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}`, 0.5)] };
     }
 
     case 'memoclaw_core_memories': {
@@ -365,10 +383,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('GET', `/v1/core-memories${qs ? '?' + qs : ''}`);
       const memories = result.memories || result.core_memories || result.data || [];
       if (memories.length === 0) {
-        return { content: [{ type: 'text', text: 'No core memories found. Store important memories with high importance scores or pin them.' }] };
+        return { content: [userText('No core memories found. Store important memories with high importance scores or pin them.', 0.3)] };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [{ type: 'text', text: `⭐ ${memories.length} core memories:\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(`⭐ ${memories.length} core memories:\n\n${formatted}`),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     case 'memoclaw_stats': {
@@ -389,7 +410,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         lines.push('\nBy namespace:');
         for (const n of result.by_namespace) lines.push(`  • ${n.namespace || '(default)'}: ${n.count}`);
       }
-      return { content: [{ type: 'text', text: `📊 Memory Stats\n\n${lines.join('\n')}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userText(`📊 Memory Stats\n\n${lines.join('\n')}`, 0.5),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     default:

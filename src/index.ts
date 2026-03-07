@@ -148,7 +148,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const msg = error instanceof Error ? error.message : String(error);
     mcpLogger.error('tool', { event: 'error', tool: name, error: msg });
     return {
-      content: [{ type: 'text', text: `Error: ${msg}` }],
+      content: [{ type: 'text', text: `Error: ${msg}`, annotations: { audience: ['user'], priority: 1.0 } }],
       isError: true,
     };
   }

@@ -1,4 +1,4 @@
-import { formatMemory } from '../format.js';
+import { formatMemory, userAndAssistantText, assistantText, userText } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs } from '../types.js';
 
@@ -22,10 +22,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       });
       const memories = result.memories || [];
       if (memories.length === 0) {
-        return { content: [{ type: 'text', text: `No memories found for query: "${query}"` }] };
+        return { content: [userText(`No memories found for query: "${query}"`, 0.3)] };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [{ type: 'text', text: `Found ${memories.length} memories:\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(`Found ${memories.length} memories:\n\n${formatted}`),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     case 'memoclaw_search': {
@@ -45,10 +48,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/memories/search?${params}`);
       const memories = result.memories || result.data || [];
       if (memories.length === 0) {
-        return { content: [{ type: 'text', text: `No memories found containing: "${query}"` }] };
+        return { content: [userText(`No memories found containing: "${query}"`, 0.3)] };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [{ type: 'text', text: `Found ${memories.length} memories containing "${query}":\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(`Found ${memories.length} memories containing "${query}":\n\n${formatted}`),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     case 'memoclaw_context': {
@@ -64,10 +70,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('POST', '/v1/context', body);
       const memories = result.memories || result.context || [];
       if (memories.length === 0) {
-        return { content: [{ type: 'text', text: `No relevant context found for: "${query}"` }] };
+        return { content: [userText(`No relevant context found for: "${query}"`, 0.3)] };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [{ type: 'text', text: `🧠 Context for "${query}" (${memories.length} memories):\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(`🧠 Context for "${query}" (${memories.length} memories):\n\n${formatted}`),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     case 'memoclaw_suggested': {
@@ -82,10 +91,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/suggested${qs ? '?' + qs : ''}`);
       const suggestions = result.suggestions || result.memories || [];
       if (suggestions.length === 0) {
-        return { content: [{ type: 'text', text: `No suggestions found${category ? ` for category "${category}"` : ''}.` }] };
+        return { content: [userText(`No suggestions found${category ? ` for category "${category}"` : ''}.`, 0.3)] };
       }
       const formatted = suggestions.map((m: any) => formatMemory(m)).join('\n\n');
-      return { content: [{ type: 'text', text: `💡 ${suggestions.length} suggestions${category ? ` (${category})` : ''}:\n\n${formatted}\n\n---\n${JSON.stringify(result, null, 2)}` }] };
+      return { content: [
+        userAndAssistantText(`💡 ${suggestions.length} suggestions${category ? ` (${category})` : ''}:\n\n${formatted}`),
+        assistantText(JSON.stringify(result, null, 2)),
+      ] };
     }
 
     default:

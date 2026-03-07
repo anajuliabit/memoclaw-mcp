@@ -953,7 +953,9 @@ describe('Tool Handlers', () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_export', arguments: { format: 'jsonl' } },
     });
-    const lines = result.content[0].text.split('\n').filter((l: string) => l.startsWith('{'));
+    // Raw data is in the assistant-only content item (content[1])
+    const dataText = result.content[1]?.text ?? result.content[0].text;
+    const lines = dataText.split('\n').filter((l: string) => l.startsWith('{'));
     expect(lines.length).toBe(2);
   });
 

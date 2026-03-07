@@ -68,6 +68,43 @@ export function validateContentLength(content: string, label = 'content'): void 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Content annotation helpers (MCP 2025-06-18)
+// ---------------------------------------------------------------------------
+
+import type { ContentAnnotations, TextContentItem } from './handlers/types.js';
+
+/**
+ * Build a text content item intended for both user and assistant display.
+ * Used for formatted memory output, success messages, etc.
+ */
+export function userAndAssistantText(text: string, priority = 0.8): TextContentItem {
+  return { type: 'text', text, annotations: { audience: ['user', 'assistant'], priority } };
+}
+
+/**
+ * Build a text content item intended only for the assistant (LLM).
+ * Used for raw JSON dumps that are useful for programmatic processing.
+ */
+export function assistantText(text: string, priority = 0.3): TextContentItem {
+  return { type: 'text', text, annotations: { audience: ['assistant'], priority } };
+}
+
+/**
+ * Build a text content item intended only for the user.
+ * Used for error messages and status information.
+ */
+export function userText(text: string, priority = 0.5): TextContentItem {
+  return { type: 'text', text, annotations: { audience: ['user'], priority } };
+}
+
+/**
+ * Build a text content item for error messages (user-facing, high priority).
+ */
+export function errorText(text: string): TextContentItem {
+  return { type: 'text', text, annotations: { audience: ['user'], priority: 1.0 } };
+}
+
 /** Allowed fields for the update endpoint */
 export const UPDATE_FIELDS = new Set([
   'content', 'importance', 'memory_type', 'namespace',
