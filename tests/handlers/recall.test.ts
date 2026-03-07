@@ -141,6 +141,71 @@ describe('handleRecall', () => {
     });
   });
 
+  describe('memoclaw_check_duplicates', () => {
+    it('reports no duplicates when recall returns empty', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_check_duplicates', { content: 'unique content' });
+      expect(result!.content[0].text).toContain('No duplicates found');
+      expect(result!.structuredContent!.has_duplicates).toBe(false);
+      expect(result!.structuredContent!.duplicates).toEqual([]);
+    });
+
+    it('reports duplicates when similar memories exist', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/recall': { memories: [{ id: '1', content: 'similar content', similarity: 0.92 }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_check_duplicates', { content: 'similar content' });
+      expect(result!.content[0].text).toContain('potential duplicate');
+      expect(result!.structuredContent!.has_duplicates).toBe(true);
+      expect((result!.structuredContent!.duplicates as any[]).length).toBe(1);
+    });
+
+    it('suggests updating for very high similarity (>= 0.9)', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/recall': { memories: [{ id: 'abc', content: 'near-exact', similarity: 0.95 }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_check_duplicates', { content: 'near-exact' });
+      expect(result!.structuredContent!.suggestion).toContain('updating memory abc');
+    });
+
+    it('suggests review for moderate similarity (0.7-0.9)', async () => {
+      const { ctx } = makeCtx({
+        'POST /v1/recall': { memories: [{ id: '1', content: 'related', similarity: 0.78 }] },
+      });
+      const result = await handleRecall(ctx, 'memoclaw_check_duplicates', { content: 'related' });
+      expect(result!.structuredContent!.suggestion).toContain('Review before storing');
+    });
+
+    it('uses default min_similarity of 0.7', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_check_duplicates', { content: 'test' });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.min_similarity).toBe(0.7);
+    });
+
+    it('respects custom min_similarity and namespace', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_check_duplicates', {
+        content: 'test', min_similarity: 0.5, namespace: 'work',
+      });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.min_similarity).toBe(0.5);
+      expect(body.namespace).toBe('work');
+    });
+
+    it('rejects empty content', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRecall(ctx, 'memoclaw_check_duplicates', { content: '' }))
+        .rejects.toThrow('content is required');
+    });
+  });
+
   it('returns null for unknown tools', async () => {
     const { ctx } = makeCtx();
     expect(await handleRecall(ctx, 'memoclaw_store', {})).toBeNull();

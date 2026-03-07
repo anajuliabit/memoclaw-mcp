@@ -112,9 +112,9 @@ describe('Tool Definitions', () => {
     ]));
   });
 
-  it('has 33 tools total', async () => {
+  it('has 34 tools total', async () => {
     const result = await listToolsHandler();
-    expect(result.tools).toHaveLength(33);
+    expect(result.tools).toHaveLength(34);
   });
 
   it('every tool has a title and annotations with all required hints', async () => {

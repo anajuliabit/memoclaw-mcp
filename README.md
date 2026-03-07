@@ -136,6 +136,7 @@ Configure your MCP client to connect to `http://localhost:3100/mcp`.
 | `memoclaw_core_memories` | Get your most important/frequently accessed memories |
 | `memoclaw_stats` | Memory usage statistics |
 | `memoclaw_history` | View edit history for a memory |
+| `memoclaw_check_duplicates` | Check if similar content exists before storing |
 | `memoclaw_status` | Check free tier remaining calls |
 | `memoclaw_init` | Verify configuration and API connectivity |
 
