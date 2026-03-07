@@ -21,11 +21,11 @@ function createMockContext(mockResponse: any = {}): HandlerContext {
 
 describe('Content Annotations', () => {
   describe('Memory handlers', () => {
-    it('memoclaw_store returns annotated content with separated JSON', async () => {
+    it('memoclaw_store returns annotated content with separated JSON and resource_link', async () => {
       const ctx = createMockContext({ memory: { id: '1', content: 'test' } });
       const result = await handleMemory(ctx, 'memoclaw_store', { content: 'test' });
       expect(result).not.toBeNull();
-      expect(result!.content.length).toBe(2);
+      expect(result!.content.length).toBe(3);
 
       // Formatted text: user + assistant audience
       const formatted = result!.content[0];
@@ -38,6 +38,15 @@ describe('Content Annotations', () => {
       expect(raw.annotations?.audience).toEqual(['assistant']);
       expect(raw.annotations?.priority).toBe(0.3);
       expect(raw.text).toContain('{');
+
+      // Resource link to stored memory
+      const link = result!.content[2];
+      expect(link.type).toBe('resource_link');
+      expect((link as any).uri).toBe('memoclaw://memories/1');
+
+      // structuredContent
+      expect(result!.structuredContent).toBeDefined();
+      expect((result!.structuredContent as any).memory.id).toBe('1');
     });
 
     it('memoclaw_get returns annotated content', async () => {

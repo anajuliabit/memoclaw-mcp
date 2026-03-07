@@ -72,7 +72,7 @@ export function validateContentLength(content: string, label = 'content'): void 
 // Content annotation helpers (MCP 2025-06-18)
 // ---------------------------------------------------------------------------
 
-import type { ContentAnnotations, TextContentItem } from './handlers/types.js';
+import type { ContentAnnotations, TextContentItem, ResourceLinkContentItem } from './handlers/types.js';
 
 /**
  * Build a text content item intended for both user and assistant display.
@@ -110,3 +110,21 @@ export const UPDATE_FIELDS = new Set([
   'content', 'importance', 'memory_type', 'namespace',
   'metadata', 'expires_at', 'pinned', 'tags', 'immutable',
 ]);
+
+// ---------------------------------------------------------------------------
+// Resource link helpers (MCP 2025-06-18)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a resource_link content item pointing to a memory resource.
+ * Mutation tools should include these to let clients subscribe to or fetch
+ * the created/modified memory via the resource system.
+ */
+export function memoryResourceLink(id: string, name?: string): ResourceLinkContentItem {
+  return {
+    type: 'resource_link',
+    uri: `memoclaw://memories/${id}`,
+    name: name || `Memory ${id}`,
+    mimeType: 'application/json',
+  };
+}

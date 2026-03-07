@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
-import { formatMemory, withConcurrency, validateContentLength, validateImportance, userAndAssistantText, assistantText, userText } from '../format.js';
+import { formatMemory, withConcurrency, validateContentLength, validateImportance, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   StatusArgs, InitArgs, IngestArgs, ExtractArgs, ConsolidateArgs,
@@ -55,9 +55,14 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         messages, text, namespace, session_id, agent_id, auto_relate: auto_relate !== false,
       });
       const count = result.memories_created ?? result.count ?? '?';
+      const memories = result.memories || result.data || [];
+      const resourceLinks = memories
+        .filter((m: any) => m.id)
+        .map((m: any) => memoryResourceLink(m.id, 'Ingested memory'));
       return { content: [
         userAndAssistantText(`📥 Ingested: ${count} memories created`),
         assistantText(JSON.stringify(result, null, 2)),
+        ...resourceLinks,
       ] };
     }
 
@@ -186,9 +191,14 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const prefix = dry_run ? '🔍 Migration preview (dry run)' : '✅ Migration complete';
         const created = result.memories_created ?? result.count ?? '?';
         const skipped = result.duplicates_skipped ?? 0;
+        const migratedMemories = result.memories || result.data || [];
+        const resourceLinks = migratedMemories
+          .filter((m: any) => m.id)
+          .map((m: any) => memoryResourceLink(m.id, 'Migrated memory'));
         return { content: [
           userAndAssistantText(`${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}`),
           assistantText(JSON.stringify(result, null, 2)),
+          ...resourceLinks,
         ] };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
@@ -410,10 +420,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         lines.push('\nBy namespace:');
         for (const n of result.by_namespace) lines.push(`  • ${n.namespace || '(default)'}: ${n.count}`);
       }
-      return { content: [
-        userText(`📊 Memory Stats\n\n${lines.join('\n')}`, 0.5),
-        assistantText(JSON.stringify(result, null, 2)),
-      ] };
+      return {
+        content: [
+          userText(`📊 Memory Stats\n\n${lines.join('\n')}`, 0.5),
+          assistantText(JSON.stringify(result, null, 2)),
+        ],
+        structuredContent: result,
+      };
     }
 
     default:

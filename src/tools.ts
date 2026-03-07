@@ -14,6 +14,39 @@
 
 const MEMORY_TYPE_ENUM = ['correction', 'preference', 'decision', 'project', 'observation', 'general'] as const;
 
+// ── Output schemas (MCP 2025-06-18) ─────────────────────────────────────────
+// When outputSchema is present, tool results include structured JSON content
+// alongside human-readable text. Clients can parse the structured block directly.
+
+const MEMORY_OBJECT_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'string' as const },
+    content: { type: 'string' as const },
+    importance: { type: 'number' as const },
+    memory_type: { type: 'string' as const },
+    namespace: { type: 'string' as const },
+    tags: { type: 'array' as const, items: { type: 'string' as const } },
+    pinned: { type: 'boolean' as const },
+    immutable: { type: 'boolean' as const },
+    expires_at: { type: 'string' as const },
+    created_at: { type: 'string' as const },
+    updated_at: { type: 'string' as const },
+    session_id: { type: 'string' as const },
+    agent_id: { type: 'string' as const },
+  },
+  required: ['id', 'content'] as string[],
+};
+
+const RECALL_RESULT_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    ...MEMORY_OBJECT_SCHEMA.properties,
+    similarity: { type: 'number' as const },
+  },
+  required: ['id', 'content'] as string[],
+};
+
 const COMMON_FILTERS = {
   tags: { type: 'array' as const, items: { type: 'string' as const }, description: 'Filter by tags (memories must have ALL specified tags).' },
   namespace: { type: 'string' as const, description: 'Filter by namespace.' },
@@ -54,6 +87,13 @@ export const TOOLS = [
       },
       required: ['content'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memory: MEMORY_OBJECT_SCHEMA,
+      },
+      required: ['memory'] as string[],
+    },
   },
   {
     name: 'memoclaw_recall',
@@ -81,6 +121,13 @@ export const TOOLS = [
       },
       required: ['query'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: { type: 'array' as const, items: RECALL_RESULT_SCHEMA },
+      },
+      required: ['memories'] as string[],
+    },
   },
   {
     name: 'memoclaw_search',
@@ -104,6 +151,13 @@ export const TOOLS = [
       },
       required: ['query'],
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+      },
+      required: ['memories'] as string[],
+    },
   },
   {
     name: 'memoclaw_get',
@@ -122,6 +176,13 @@ export const TOOLS = [
         id: { type: 'string', description: 'The memory ID to retrieve.' },
       },
       required: ['id'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memory: MEMORY_OBJECT_SCHEMA,
+      },
+      required: ['memory'] as string[],
     },
   },
   {
@@ -144,6 +205,14 @@ export const TOOLS = [
         offset: { type: 'number', description: 'Pagination offset. Default: 0.' },
         ...COMMON_FILTERS,
       },
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
+        total: { type: 'number' as const },
+      },
+      required: ['memories', 'total'] as string[],
     },
   },
   {
@@ -209,6 +278,13 @@ export const TOOLS = [
         immutable: { type: 'boolean', description: 'Set to true to make this memory immutable. WARNING: This is a one-way operation — once set, the memory cannot be updated or deleted.' },
       },
       required: ['id'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memory: MEMORY_OBJECT_SCHEMA,
+      },
+      required: ['memory'] as string[],
     },
   },
   {
@@ -486,6 +562,13 @@ export const TOOLS = [
         memory_type: { type: 'string', enum: MEMORY_TYPE_ENUM, description: 'Count only memories of this type.' },
       },
     },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        count: { type: 'number' as const },
+      },
+      required: ['count'] as string[],
+    },
   },
   {
     name: 'memoclaw_delete_namespace',
@@ -751,5 +834,19 @@ export const TOOLS = [
       openWorldHint: false,
     },
     inputSchema: { type: 'object' as const, properties: {} },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        total_memories: { type: 'number' as const },
+        pinned_count: { type: 'number' as const },
+        never_accessed: { type: 'number' as const },
+        total_accesses: { type: 'number' as const },
+        avg_importance: { type: 'number' as const },
+        oldest_memory: { type: 'string' as const },
+        newest_memory: { type: 'string' as const },
+        by_type: { type: 'array' as const, items: { type: 'object' as const, properties: { memory_type: { type: 'string' as const }, count: { type: 'number' as const } } } },
+        by_namespace: { type: 'array' as const, items: { type: 'object' as const, properties: { namespace: { type: 'string' as const }, count: { type: 'number' as const } } } },
+      },
+    },
   },
 ];

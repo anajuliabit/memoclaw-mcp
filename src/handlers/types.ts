@@ -17,7 +17,21 @@ export interface TextContentItem {
   annotations?: ContentAnnotations;
 }
 
-export type ToolResult = { content: TextContentItem[]; isError?: boolean };
+/**
+ * MCP resource_link content item (MCP 2025-06-18).
+ * Returned by mutation tools to link to created/modified resources.
+ */
+export interface ResourceLinkContentItem {
+  type: 'resource_link';
+  uri: string;
+  name?: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export type ContentItem = TextContentItem | ResourceLinkContentItem;
+
+export type ToolResult = { content: ContentItem[]; isError?: boolean; structuredContent?: Record<string, unknown> };
 
 export type ToolHandler = (name: string, args: any) => Promise<ToolResult>;
 
