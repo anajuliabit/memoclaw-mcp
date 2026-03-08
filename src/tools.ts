@@ -696,6 +696,9 @@ export const TOOLS = [
         tags: { type: 'array', items: { type: 'string' }, description: 'Count only memories with ALL of these tags.' },
         agent_id: { type: 'string', description: 'Count only memories from this agent.' },
         memory_type: { type: 'string', enum: MEMORY_TYPE_ENUM, description: 'Count only memories of this type.' },
+        session_id: { type: 'string', description: 'Count only memories from this session.' },
+        after: { type: 'string', description: 'Count only memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".' },
+        before: { type: 'string', description: 'Count only memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".' },
       },
     },
     outputSchema: {

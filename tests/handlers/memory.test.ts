@@ -323,6 +323,27 @@ describe('handleMemory', () => {
       const result = await handleMemory(ctx, 'memoclaw_count', {});
       expect(result!.content[0].text).toContain('15');
     });
+
+    it('passes session_id, before, and after filters', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories/count': { count: 7 },
+      });
+      const result = await handleMemory(ctx, 'memoclaw_count', {
+        namespace: 'ns1',
+        session_id: 'sess-123',
+        after: '2025-01-01T00:00:00Z',
+        before: '2025-12-31T23:59:59Z',
+      });
+      expect(result!.content[0].text).toContain('7');
+      expect(result!.content[0].text).toContain('session=sess-123');
+      expect(result!.content[0].text).toContain('after=2025-01-01T00:00:00Z');
+      expect(result!.content[0].text).toContain('before=2025-12-31T23:59:59Z');
+      // Verify params were passed to API
+      const callUrl = api.makeRequest.mock.calls[0][1];
+      expect(callUrl).toContain('session_id=sess-123');
+      expect(callUrl).toContain('after=2025-01-01T00%3A00%3A00Z');
+      expect(callUrl).toContain('before=2025-12-31T23%3A59%3A59Z');
+    });
   });
 
   // ── unknown tool returns null ────────────────────────────────────────────

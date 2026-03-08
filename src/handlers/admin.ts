@@ -3,7 +3,6 @@ import { join, extname, basename } from 'node:path';
 import { formatMemory, withConcurrency, validateContentLength, validateImportance, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
 import { validateIdentifier, validateId } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
-import { throwIfCancelled, CancellationError } from './types.js';
 import type {
   StatusArgs, InitArgs, IngestArgs, ExtractArgs, ConsolidateArgs,
   ExportArgs, MigrateArgs, DeleteNamespaceArgs, TagsArgs, HistoryArgs,
