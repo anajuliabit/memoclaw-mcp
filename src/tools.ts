@@ -324,6 +324,8 @@ export const TOOLS = [
         pinned: { type: 'boolean', description: 'Pin or unpin the memory.' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Replace tags array.' },
         immutable: { type: 'boolean', description: 'Set to true to make this memory immutable. WARNING: This is a one-way operation — once set, the memory cannot be updated or deleted.' },
+        session_id: { type: 'string', description: 'Update the session ID associated with this memory.' },
+        agent_id: { type: 'string', description: 'Update the agent ID associated with this memory.' },
       },
       required: ['id'],
     },
