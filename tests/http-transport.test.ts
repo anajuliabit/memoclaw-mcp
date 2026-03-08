@@ -532,6 +532,236 @@ describe('HTTP Transport with Bearer Auth', () => {
   });
 });
 
+describe('CORS and Origin Validation', () => {
+  describe('with default origins (localhost only)', () => {
+    let server: HttpServer;
+    let port: number;
+
+    beforeEach(async () => {
+      const ctx = buildHttpHandler();
+      const result = await startServer(ctx.handler);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterEach(async () => {
+      await stopServer(server);
+    });
+
+    it('allows requests without Origin header (non-browser clients)', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
+      });
+      expect(res.status).toBe(200);
+      // No CORS headers when no Origin is sent
+      expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    });
+
+    it('allows localhost Origin and returns CORS headers', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'http://localhost',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost');
+      expect(res.headers.get('access-control-expose-headers')).toBe('Mcp-Session-Id');
+      expect(res.headers.get('vary')).toContain('Origin');
+    });
+
+    it('rejects disallowed Origin with 403', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://evil.com',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
+      });
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.error).toMatch(/origin.*not allowed/i);
+    });
+  });
+
+  describe('with wildcard origins (*)', () => {
+    let server: HttpServer;
+    let port: number;
+
+    beforeEach(async () => {
+      const ctx = buildHttpHandler({ allowedOrigins: '*' });
+      const result = await startServer(ctx.handler);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterEach(async () => {
+      await stopServer(server);
+    });
+
+    it('allows any Origin and returns * for Access-Control-Allow-Origin', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://any-site.com',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+      // No Vary header when using wildcard
+      expect(res.headers.get('vary')).toBeNull();
+    });
+  });
+
+  describe('with custom origins', () => {
+    let server: HttpServer;
+    let port: number;
+
+    beforeEach(async () => {
+      const ctx = buildHttpHandler({ allowedOrigins: 'https://app.example.com,https://dev.example.com' });
+      const result = await startServer(ctx.handler);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterEach(async () => {
+      await stopServer(server);
+    });
+
+    it('allows configured origin', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://app.example.com',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
+    });
+
+    it('rejects origin not in the list', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://other.com',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
+      });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('OPTIONS preflight', () => {
+    let server: HttpServer;
+    let port: number;
+
+    beforeEach(async () => {
+      const ctx = buildHttpHandler({ allowedOrigins: '*' });
+      const result = await startServer(ctx.handler);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterEach(async () => {
+      await stopServer(server);
+    });
+
+    it('returns 204 with CORS headers for OPTIONS /mcp', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'OPTIONS',
+        headers: {
+          'Origin': 'https://webapp.example.com',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'Content-Type, Authorization, Mcp-Session-Id',
+        },
+      });
+      expect(res.status).toBe(204);
+      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+      expect(res.headers.get('access-control-allow-methods')).toContain('POST');
+      expect(res.headers.get('access-control-allow-methods')).toContain('DELETE');
+      expect(res.headers.get('access-control-allow-methods')).toContain('OPTIONS');
+      expect(res.headers.get('access-control-allow-headers')).toContain('Content-Type');
+      expect(res.headers.get('access-control-allow-headers')).toContain('Authorization');
+      expect(res.headers.get('access-control-allow-headers')).toContain('Mcp-Session-Id');
+      expect(res.headers.get('access-control-expose-headers')).toBe('Mcp-Session-Id');
+      expect(res.headers.get('access-control-max-age')).toBe('86400');
+    });
+
+    it('returns 204 with no body for preflight', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'OPTIONS',
+        headers: { 'Origin': 'https://webapp.example.com' },
+      });
+      expect(res.status).toBe(204);
+      const body = await res.text();
+      expect(body).toBe('');
+    });
+
+    it('rejects OPTIONS from disallowed origin', async () => {
+      // Use a handler with restricted origins
+      await stopServer(server);
+      const ctx = buildHttpHandler({ allowedOrigins: 'https://allowed.com' });
+      const result = await startServer(ctx.handler);
+      server = result.server;
+      port = result.port;
+
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'OPTIONS',
+        headers: { 'Origin': 'https://evil.com' },
+      });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('CORS headers on error responses', () => {
+    let server: HttpServer;
+    let port: number;
+
+    beforeEach(async () => {
+      const ctx = buildHttpHandler({ allowedOrigins: '*' });
+      const result = await startServer(ctx.handler);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterEach(async () => {
+      await stopServer(server);
+    });
+
+    it('includes CORS headers on GET /mcp error response', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'GET',
+        headers: { 'Origin': 'https://webapp.example.com' },
+      });
+      // GET without session returns 400, but should still have CORS headers
+      expect(res.status).toBe(400);
+      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    });
+
+    it('includes CORS headers on DELETE /mcp 404 response', async () => {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: 'DELETE',
+        headers: {
+          'Mcp-Session-Id': 'nonexistent',
+          'Origin': 'https://webapp.example.com',
+        },
+      });
+      expect(res.status).toBe(404);
+      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    });
+  });
+});
+
 describe('HTTP Transport CORS', () => {
   describe('with specific allowed origins', () => {
     let server: HttpServer;
