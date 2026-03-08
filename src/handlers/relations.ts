@@ -1,4 +1,5 @@
 import { formatMemory, withConcurrency, userAndAssistantText, assistantText, userText } from '../format.js';
+import { validateId, validateIdentifier } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { CreateRelationArgs, ListRelationsArgs, DeleteRelationArgs, GraphArgs } from '../types.js';
 
@@ -8,9 +9,10 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
   switch (name) {
     case 'memoclaw_create_relation': {
       const { memory_id, target_id, relation_type, metadata } = args as CreateRelationArgs;
-      if (!memory_id || !target_id || !relation_type) {
-        throw new Error('memory_id, target_id, and relation_type are all required');
-      }
+      validateId(memory_id, 'memory_id');
+      validateId(target_id, 'target_id');
+      validateIdentifier(relation_type, 'relation_type');
+      if (!relation_type) throw new Error('relation_type is required');
       const body: any = { target_id, relation_type };
       if (metadata) body.metadata = metadata;
       const result = await makeRequest('POST', `/v1/memories/${memory_id}/relations`, body);
@@ -26,7 +28,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
 
     case 'memoclaw_list_relations': {
       const { memory_id } = args as ListRelationsArgs;
-      if (!memory_id) throw new Error('memory_id is required');
+      validateId(memory_id, 'memory_id');
       const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
       const relations = result.relations || [];
       if (relations.length === 0) {
@@ -46,7 +48,8 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
 
     case 'memoclaw_delete_relation': {
       const { memory_id, relation_id } = args as DeleteRelationArgs;
-      if (!memory_id || !relation_id) throw new Error('memory_id and relation_id are required');
+      validateId(memory_id, 'memory_id');
+      validateId(relation_id, 'relation_id');
       const result = await makeRequest('DELETE', `/v1/memories/${memory_id}/relations/${relation_id}`);
       return {
         content: [
@@ -59,7 +62,8 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
 
     case 'memoclaw_graph': {
       const { memory_id, depth: rawDepth, relation_type } = args as GraphArgs;
-      if (!memory_id) throw new Error('memory_id is required');
+      validateId(memory_id, 'memory_id');
+      if (relation_type) validateIdentifier(relation_type, 'relation_type');
       const depth = Math.min(Math.max(rawDepth || 1, 1), 3);
       const visited = new Set<string>();
       const nodes: any[] = [];

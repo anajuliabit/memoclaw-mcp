@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-03-08
+
+### Added
+- Server `instructions` field in MCP InitializeResult (Fixes #115)
+  - Provides LLMs with a concise description of MemoClaw capabilities and constraints
+  - Improves tool discovery for MCP clients that surface instructions in system prompts
+- Input validation module (`src/validate.ts`) with helpers for identifiers, IDs, tags, and queries (Fixes #117)
+  - `validateIdentifier()` — enforces length limits (256 chars) and safe character set for namespace, session_id, agent_id, memory_type, relation_type
+  - `validateId()` — ensures IDs are non-empty strings within length limits
+  - `validateTags()` — validates tag arrays (max 50 tags, 128 chars each, no empty strings)
+  - `validateQuery()` — ensures query strings are non-empty
+- 16 new tests for the validation module
+
+### Changed
+- All handlers now validate string parameters client-side before making API calls
+  - Faster feedback for invalid input (no network roundtrip needed)
+  - Clear, descriptive error messages for each parameter
+
 ## [1.16.0] - 2026-03-08
 
 ### Added

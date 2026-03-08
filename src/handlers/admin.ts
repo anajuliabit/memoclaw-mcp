@@ -1,6 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
 import { formatMemory, withConcurrency, validateContentLength, validateImportance, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
+import { validateIdentifier, validateId } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   StatusArgs, InitArgs, IngestArgs, ExtractArgs, ConsolidateArgs,
@@ -70,6 +71,9 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
     case 'memoclaw_ingest': {
       const { messages, text, namespace, session_id, agent_id, auto_relate } = args as IngestArgs;
       if (!messages && !text) throw new Error('Either messages or text is required');
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(session_id, 'session_id');
+      validateIdentifier(agent_id, 'agent_id');
       const result = await makeRequest('POST', '/v1/ingest', {
         messages, text, namespace, session_id, agent_id, auto_relate: auto_relate !== false,
       });
@@ -277,7 +281,9 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_delete_namespace': {
       const { namespace, agent_id } = args as DeleteNamespaceArgs;
+      validateIdentifier(namespace, 'namespace');
       if (!namespace) throw new Error('namespace is required');
+      validateIdentifier(agent_id, 'agent_id');
       const deletedIds: string[] = [];
       const errors: string[] = [];
       const failedIds = new Set<string>();
@@ -370,7 +376,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_history': {
       const { id } = args as HistoryArgs;
-      if (!id) throw new Error('id is required');
+      validateId(id, 'id');
       const result = await makeRequest('GET', `/v1/memories/${id}/history`);
       const history = result.history || result.versions || result.data || [];
       if (history.length === 0) {

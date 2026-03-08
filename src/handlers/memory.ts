@@ -1,4 +1,5 @@
 import { formatMemory, withConcurrency, validateContentLength, validateImportance, UPDATE_FIELDS, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
+import { validateIdentifier, validateId, validateTags } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   StoreArgs, GetArgs, ListArgs, UpdateArgs, DeleteArgs,
@@ -17,6 +18,11 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       }
       validateContentLength(content);
       validateImportance(importance);
+      validateTags(tags);
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(memory_type, 'memory_type');
+      validateIdentifier(session_id, 'session_id');
+      validateIdentifier(agent_id, 'agent_id');
       const body: any = { content };
       if (importance !== undefined) body.importance = importance;
       if (tags) body.tags = tags;
@@ -41,7 +47,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_get': {
       const { id } = args as GetArgs;
-      if (!id) throw new Error('id is required');
+      validateId(id, 'id');
       const result = await makeRequest('GET', `/v1/memories/${id}`);
       const memory = result.memory || result;
       return {
@@ -82,7 +88,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_update': {
       const { id, ...allFields } = args as UpdateArgs;
-      if (!id) throw new Error('id is required');
+      validateId(id, 'id');
       const updateFields: Record<string, any> = {};
       for (const [key, value] of Object.entries(allFields)) {
         if (UPDATE_FIELDS.has(key) && value !== undefined) updateFields[key] = value;
@@ -106,7 +112,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_delete': {
       const { id } = args as DeleteArgs;
-      if (!id) throw new Error('id is required');
+      validateId(id, 'id');
       const result = await makeRequest('DELETE', `/v1/memories/${id}`);
       return {
         content: [
@@ -330,7 +336,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_pin': {
       const { id } = args as PinArgs;
-      if (!id) throw new Error('id is required');
+      validateId(id, 'id');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: true });
       const memory = result.memory || result;
       return {
@@ -344,7 +350,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_unpin': {
       const { id } = args as UnpinArgs;
-      if (!id) throw new Error('id is required');
+      validateId(id, 'id');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: false });
       const memory = result.memory || result;
       return {
