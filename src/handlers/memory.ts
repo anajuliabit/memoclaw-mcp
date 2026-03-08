@@ -98,6 +98,11 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       }
       if (typeof updateFields.content === 'string') validateContentLength(updateFields.content);
       validateImportance(updateFields.importance);
+      validateIdentifier(updateFields.namespace, 'namespace');
+      validateIdentifier(updateFields.memory_type, 'memory_type');
+      validateIdentifier(updateFields.session_id, 'session_id');
+      validateIdentifier(updateFields.agent_id, 'agent_id');
+      validateTags(updateFields.tags);
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
       const memory = result.memory || result;
       return {

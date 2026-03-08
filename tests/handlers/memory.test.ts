@@ -130,6 +130,34 @@ describe('handleMemory', () => {
       const body = api.makeRequest.mock.calls[0][2];
       expect(body.metadata).toEqual({ key: 'val' });
     });
+
+    it('rejects invalid namespace characters in update', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', namespace: 'bad namespace!' }))
+        .rejects.toThrow('namespace contains invalid characters');
+    });
+
+    it('rejects invalid memory_type characters in update', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', memory_type: 'type with spaces' }))
+        .rejects.toThrow('memory_type contains invalid characters');
+    });
+
+    it('passes session_id and agent_id to API', async () => {
+      const { ctx, api } = makeCtx({
+        'PATCH /v1/memories/': { memory: { id: '1', content: 'test' } },
+      });
+      await handleMemory(ctx, 'memoclaw_update', { id: '1', session_id: 'sess1', agent_id: 'agent1' });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.session_id).toBe('sess1');
+      expect(body.agent_id).toBe('agent1');
+    });
+
+    it('validates tags in update', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', tags: [123 as any] }))
+        .rejects.toThrow('tags[0] must be a non-empty string');
+    });
   });
 
   // ── delete ───────────────────────────────────────────────────────────────

@@ -117,6 +117,7 @@ export function errorText(text: string): TextContentItem {
 export const UPDATE_FIELDS = new Set([
   'content', 'importance', 'memory_type', 'namespace',
   'metadata', 'expires_at', 'pinned', 'tags', 'immutable',
+  'session_id', 'agent_id',
 ]);
 
 // ---------------------------------------------------------------------------
