@@ -285,6 +285,26 @@ async function main() {
       return allowedOrigins.has(origin.toLowerCase());
     }
 
+    /**
+     * Set CORS response headers for browser-based MCP clients.
+     * Only sets Access-Control-Allow-Origin when the request Origin is validated.
+     */
+    function setCorsHeaders(res: import('node:http').ServerResponse, origin: string | undefined): void {
+      if (!origin) return; // Non-browser request — no CORS headers needed
+
+      // Reflect the validated origin (already checked by isOriginAllowed)
+      if (allowedOrigins === 'any') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+      }
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id');
+      res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
+      res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight for 24h
+    }
+
     const httpServer = createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://localhost:${port}`);
 
@@ -295,12 +315,22 @@ async function main() {
         return;
       }
 
-      // Origin validation for /mcp to prevent DNS rebinding attacks
+      // Origin validation and CORS for /mcp
       if (url.pathname === '/mcp') {
         const origin = req.headers['origin'] as string | undefined;
         if (!isOriginAllowed(origin)) {
           res.writeHead(403, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: `Origin "${origin}" is not allowed. Set MEMOCLAW_ALLOWED_ORIGINS to configure.` }));
+          return;
+        }
+
+        // Set CORS headers on all /mcp responses (including errors below)
+        setCorsHeaders(res, origin);
+
+        // Handle CORS preflight
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
           return;
         }
       }
