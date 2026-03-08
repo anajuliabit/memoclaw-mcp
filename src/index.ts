@@ -31,7 +31,7 @@ import type { LogLevel } from './logging.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let VERSION = '1.16.0';
+let VERSION = '1.17.0';
 try {
   const pkg = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
   VERSION = pkg.version;
@@ -78,9 +78,24 @@ const handleReadResource = createResourceHandler(api, config);
 const handleGetPrompt = createPromptHandler(api, config);
 const handleComplete = createCompletionHandler(api, config);
 
+const SERVER_INSTRUCTIONS = [
+  'MemoClaw is a semantic memory service for AI agents.',
+  'Store, recall, search, and manage memories with vector search.',
+  'Key constraints: max 8192 chars per memory, importance must be 0.0–1.0.',
+  'Identity is wallet-based — no API keys or registration needed.',
+  'Free tier: 100 API calls per wallet, then pay-per-use via x402 (USDC on Base).',
+  'Use memoclaw_recall for semantic search, memoclaw_search for text/substring search.',
+  'Use namespaces to isolate memories per project or context.',
+  'Pin important memories, set immutable to lock from edits.',
+  'Check duplicates before storing with memoclaw_check_duplicates.',
+].join(' ');
+
 const server = new Server(
   { name: 'memoclaw', version: VERSION },
-  { capabilities: { tools: {}, resources: {}, prompts: {}, completions: {}, logging: {} } }
+  {
+    capabilities: { tools: {}, resources: {}, prompts: {}, completions: {}, logging: {} },
+    instructions: SERVER_INSTRUCTIONS,
+  }
 );
 
 // Attach logger to server for sending notifications to clients

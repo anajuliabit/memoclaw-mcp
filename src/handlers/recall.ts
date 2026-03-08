@@ -1,4 +1,5 @@
 import { formatMemory, userAndAssistantText, assistantText, userText } from '../format.js';
+import { validateIdentifier, validateTags, validateQuery } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
 
@@ -8,9 +9,12 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
   switch (name) {
     case 'memoclaw_recall': {
       const { query, limit, min_similarity, tags, namespace, memory_type, session_id, agent_id, include_relations, after, before } = args as RecallArgs;
-      if (!query || (typeof query === 'string' && query.trim() === '')) {
-        throw new Error('query is required and cannot be empty');
-      }
+      validateQuery(query);
+      validateTags(tags);
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(memory_type, 'memory_type');
+      validateIdentifier(session_id, 'session_id');
+      validateIdentifier(agent_id, 'agent_id');
       const filters: Record<string, any> = {};
       if (tags) filters.tags = tags;
       if (memory_type) filters.memory_type = memory_type;
@@ -37,9 +41,12 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_search': {
       const { query, limit, namespace, tags, memory_type, session_id, agent_id, after, before } = args as SearchArgs;
-      if (!query || (typeof query === 'string' && query.trim() === '')) {
-        throw new Error('query is required and cannot be empty');
-      }
+      validateQuery(query);
+      validateIdentifier(namespace, 'namespace');
+      validateTags(tags);
+      validateIdentifier(memory_type, 'memory_type');
+      validateIdentifier(session_id, 'session_id');
+      validateIdentifier(agent_id, 'agent_id');
       const params = new URLSearchParams();
       params.set('q', query);
       if (limit !== undefined) params.set('limit', String(limit));
@@ -67,9 +74,10 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_context': {
       const { query, limit, namespace, session_id, agent_id } = args as ContextArgs;
-      if (!query || (typeof query === 'string' && query.trim() === '')) {
-        throw new Error('query is required and cannot be empty');
-      }
+      validateQuery(query);
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(session_id, 'session_id');
+      validateIdentifier(agent_id, 'agent_id');
       const body: any = { query };
       if (limit !== undefined) body.limit = limit;
       if (namespace) body.namespace = namespace;
@@ -119,6 +127,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
+      validateIdentifier(namespace, 'namespace');
       const threshold = min_similarity ?? 0.7;
       const maxResults = limit ?? 5;
       const body: any = { query: content, limit: maxResults, min_similarity: threshold };
