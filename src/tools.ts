@@ -824,7 +824,7 @@ export const TOOLS = [
       type: 'object' as const,
       properties: {
         memory_id: { type: 'string', description: 'Starting memory ID.' },
-        depth: { type: 'number', description: 'Hops to traverse. Default: 1. Max: 3.' },
+        depth: { type: 'number', minimum: 1, maximum: 3, description: 'Hops to traverse. Default: 1. Max: 3.' },
         relation_type: { type: 'string', enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'], description: 'Only follow this relation type.' },
       },
       required: ['memory_id'],

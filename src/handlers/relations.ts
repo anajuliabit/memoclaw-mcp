@@ -30,7 +30,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
       const relations = result.relations || [];
       if (relations.length === 0) {
-        return { content: [userText(`No relations found for memory ${memory_id}.`, 0.3)] };
+        return { content: [userText(`No relations found for memory ${memory_id}.`, 0.3)], structuredContent: { relations: [] } };
       }
       const formatted = relations.map((r: any) =>
         `🔗 ${r.id || '?'}: ${r.source_id || memory_id} —[${r.relation_type}]→ ${r.target_id}`

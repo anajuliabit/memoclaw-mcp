@@ -31,7 +31,7 @@ import type { LogLevel } from './logging.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let VERSION = '1.15.0';
+let VERSION = '1.16.0';
 try {
   const pkg = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
   VERSION = pkg.version;
@@ -138,10 +138,26 @@ server.setRequestHandler(SetLevelRequestSchema, async (request) => {
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: args, _meta } = request.params;
   mcpLogger.debug('tool', { event: 'call', tool: name, args });
+
+  // Extract progressToken from _meta (MCP spec: optional progress reporting)
+  const progressToken = _meta?.progressToken;
+  const progress = progressToken
+    ? async (current: number, total: number) => {
+        try {
+          await server.notification({
+            method: 'notifications/progress' as const,
+            params: { progressToken, progress: current, total },
+          });
+        } catch {
+          // Don't let progress notification failures break the tool call
+        }
+      }
+    : undefined;
+
   try {
-    const result = await handleToolCall(name, args as any);
+    const result = await handleToolCall(name, args as any, progress);
     mcpLogger.debug('tool', { event: 'success', tool: name });
     return result;
   } catch (error) {

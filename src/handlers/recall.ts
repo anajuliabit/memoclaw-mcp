@@ -23,7 +23,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       });
       const memories = result.memories || [];
       if (memories.length === 0) {
-        return { content: [userText(`No memories found for query: "${query}"`, 0.3)] };
+        return { content: [userText(`No memories found for query: "${query}"`, 0.3)], structuredContent: { memories: [] } };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
       return {
@@ -53,7 +53,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/memories/search?${params}`);
       const memories = result.memories || result.data || [];
       if (memories.length === 0) {
-        return { content: [userText(`No memories found containing: "${query}"`, 0.3)] };
+        return { content: [userText(`No memories found containing: "${query}"`, 0.3)], structuredContent: { memories: [] } };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
       return {
@@ -78,7 +78,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('POST', '/v1/context', body);
       const memories = result.memories || result.context || [];
       if (memories.length === 0) {
-        return { content: [userText(`No relevant context found for: "${query}"`, 0.3)] };
+        return { content: [userText(`No relevant context found for: "${query}"`, 0.3)], structuredContent: { memories: [] } };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
       return {
@@ -102,7 +102,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/suggested${qs ? '?' + qs : ''}`);
       const suggestions = result.suggestions || result.memories || [];
       if (suggestions.length === 0) {
-        return { content: [userText(`No suggestions found${category ? ` for category "${category}"` : ''}.`, 0.3)] };
+        return { content: [userText(`No suggestions found${category ? ` for category "${category}"` : ''}.`, 0.3)], structuredContent: { suggestions: [] } };
       }
       const formatted = suggestions.map((m: any) => formatMemory(m)).join('\n\n');
       return {

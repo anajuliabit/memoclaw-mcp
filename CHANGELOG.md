@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-03-08
+
+### Added
+- MCP progress notifications for long-running operations (Fixes #110)
+  - Handlers report progress via `notifications/progress` when client provides `_meta.progressToken`
+  - Supported tools: `bulk_store`, `bulk_delete`, `batch_update`, `delete_namespace`, `export` (fallback), `migrate` (fallback), and `import` (fallback)
+- Tests for progress notification callbacks and empty-result structuredContent
+
+### Fixed
+- Missing `structuredContent` on empty results for `memoclaw_recall`, `memoclaw_search`, `memoclaw_context`, `memoclaw_suggested`, and `memoclaw_list_relations` — clients parsing structured output now always get a predictable shape
+- Added `minimum`/`maximum` constraints to `depth` parameter in `memoclaw_graph` input schema (handler already clamped to 1-3)
+
 ## [1.15.0] - 2026-03-07
 
 ### Added
