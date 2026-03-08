@@ -7,7 +7,7 @@ import type {
 } from '../types.js';
 
 export async function handleMemory(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
-  const { makeRequest } = ctx;
+  const { makeRequest, progress } = ctx;
 
   switch (name) {
     case 'memoclaw_store': {
@@ -137,8 +137,14 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         }
       } catch {
         // Fallback: delete one-by-one
+        let deleteProgress = 0;
         const results = await withConcurrency(
-          ids.map((id: string) => () => makeRequest('DELETE', `/v1/memories/${id}`)),
+          ids.map((id: string) => async () => {
+            const result = await makeRequest('DELETE', `/v1/memories/${id}`);
+            deleteProgress++;
+            await progress(deleteProgress, ids.length);
+            return result;
+          }),
           10
         );
         succeeded = results.filter(r => r.status === 'fulfilled').length;
@@ -207,15 +213,19 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       }
 
       // Fallback: store one-by-one with concurrency
+      let storeProgress = 0;
       const results = await withConcurrency(
-        memories.map((m: any) => () => {
+        memories.map((m: any) => async () => {
           const body: any = {};
           for (const key of STORE_FIELDS) {
             if (m[key] !== undefined) body[key] = m[key];
           }
           if (session_id) body.session_id = session_id;
           if (agent_id) body.agent_id = agent_id;
-          return makeRequest('POST', '/v1/store', body);
+          const result = await makeRequest('POST', '/v1/store', body);
+          storeProgress++;
+          await progress(storeProgress, memories.length);
+          return result;
         }),
         10
       );
@@ -286,8 +296,9 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       }
 
       // Fallback: store one-by-one with concurrency
+      let importProgress = 0;
       const results = await withConcurrency(
-        memories.map((m: any) => () => {
+        memories.map((m: any) => async () => {
           const body: any = { content: m.content };
           if (m.importance !== undefined) body.importance = m.importance;
           if (m.tags) body.tags = m.tags;
@@ -297,7 +308,10 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           if (m.immutable !== undefined) body.immutable = m.immutable;
           if (session_id) body.session_id = session_id;
           if (agent_id) body.agent_id = agent_id;
-          return makeRequest('POST', '/v1/store', body);
+          const result = await makeRequest('POST', '/v1/store', body);
+          importProgress++;
+          await progress(importProgress, memories.length);
+          return result;
         }),
         10
       );
@@ -371,14 +385,18 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
+          let updateProgress = 0;
           const results = await withConcurrency(
-            updates.map((u: any) => () => {
+            updates.map((u: any) => async () => {
               const { id, ...fields } = u;
               const updateFields: Record<string, any> = {};
               for (const [key, value] of Object.entries(fields)) {
                 if (UPDATE_FIELDS.has(key) && value !== undefined) updateFields[key] = value;
               }
-              return makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
+              const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
+              updateProgress++;
+              await progress(updateProgress, updates.length);
+              return result;
             }),
             10
           );

@@ -35,18 +35,27 @@ export type ToolResult = { content: ContentItem[]; isError?: boolean; structured
 
 export type ToolHandler = (name: string, args: any) => Promise<ToolResult>;
 
+/**
+ * Progress callback for long-running operations.
+ * Wraps server.sendProgress() — only emits if the client provided a progressToken.
+ */
+export type ProgressCallback = (current: number, total: number) => Promise<void>;
+
 export interface HandlerContext {
   api: ApiClient;
   config: Config;
   makeRequest: ApiClient['makeRequest'];
   account: ApiClient['account'];
+  /** Report progress for long-running operations. No-op if client didn't provide a progressToken. */
+  progress: ProgressCallback;
 }
 
-export function createContext(api: ApiClient, config: Config): HandlerContext {
+export function createContext(api: ApiClient, config: Config, progress?: ProgressCallback): HandlerContext {
   return {
     api,
     config,
     makeRequest: api.makeRequest,
     account: api.account,
+    progress: progress || (async () => {}),
   };
 }

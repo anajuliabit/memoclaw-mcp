@@ -9,7 +9,7 @@ import type {
 } from '../types.js';
 
 export async function handleAdmin(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
-  const { makeRequest, account, config } = ctx;
+  const { makeRequest, account, config, progress } = ctx;
 
   switch (name) {
     case 'memoclaw_status': {
@@ -149,7 +149,9 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const allMemories: any[] = [];
         let offset = 0;
         const pageSize = 100;
+        let exportPage = 0;
         while (true) {
+          exportPage++;
           const fallbackParams = new URLSearchParams();
           fallbackParams.set('limit', String(pageSize));
           fallbackParams.set('offset', String(offset));
@@ -158,6 +160,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           const result = await makeRequest('GET', `/v1/memories?${fallbackParams}`);
           const memories = result.memories || result.data || [];
           allMemories.push(...memories);
+          await progress(allMemories.length, result.total ?? allMemories.length);
           if (memories.length < pageSize) break;
           offset += pageSize;
         }
@@ -247,7 +250,8 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           }
           let totalCreated = 0;
           const errors: string[] = [];
-          for (const file of fileList) {
+          for (let fi = 0; fi < fileList.length; fi++) {
+            const file = fileList[fi];
             try {
               const r = await makeRequest('POST', '/v1/ingest', {
                 text: file.content,
@@ -258,6 +262,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
             } catch (e: any) {
               errors.push(`${file.filename}: ${e.message}`);
             }
+            await progress(fi + 1, fileList.length);
           }
           let text = `✅ Migration complete (via ingest fallback)\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${totalCreated}`;
           if (errors.length > 0) text += `\n\n❌ Errors:\n${errors.join('\n')}`;
@@ -305,6 +310,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
             errors.push(`${toDelete[i].id}: ${(deleteResults[i] as PromiseRejectedResult).reason?.message || 'unknown'}`);
           }
         }
+        await progress(deletedIds.length, deletedIds.length + (memories.length >= pageSize ? pageSize : 0));
         if (memories.length < pageSize) break;
         if (pageSuccesses === 0) break;
       }
