@@ -445,12 +445,15 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_count': {
-      const { namespace, tags, agent_id, memory_type } = args as CountArgs;
+      const { namespace, tags, agent_id, memory_type, session_id, before, after } = args as CountArgs;
       const params = new URLSearchParams();
       if (namespace) params.set('namespace', namespace);
       if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));
       if (agent_id) params.set('agent_id', agent_id);
       if (memory_type) params.set('memory_type', memory_type);
+      if (session_id) params.set('session_id', session_id);
+      if (before) params.set('before', before);
+      if (after) params.set('after', after);
 
       let total: number | string = 'unknown';
       try {
@@ -487,7 +490,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         }
       }
 
-      const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, tags?.length && `tags=${tags.join(',')}`].filter(Boolean);
+      const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, session_id && `session=${session_id}`, tags?.length && `tags=${tags.join(',')}`, after && `after=${after}`, before && `before=${before}`].filter(Boolean);
       const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
       return {
         content: [userText(`📊 Total memories${filterStr}: ${total}`, 0.5)],

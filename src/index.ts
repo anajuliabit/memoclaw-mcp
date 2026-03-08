@@ -31,7 +31,7 @@ import type { LogLevel } from './logging.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let VERSION = '1.17.0';
+let VERSION = 'unknown';
 try {
   const pkg = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
   VERSION = pkg.version;

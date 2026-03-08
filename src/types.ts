@@ -226,6 +226,9 @@ export interface CountArgs {
   tags?: string[];
   agent_id?: string;
   memory_type?: string;
+  session_id?: string;
+  before?: string;
+  after?: string;
 }
 
 export interface DeleteNamespaceArgs {
