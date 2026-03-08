@@ -123,7 +123,7 @@ describe('handleAdmin', () => {
       );
       const ctx = createContext(api as any, testConfig);
       const result = await handleAdmin(ctx, 'memoclaw_export', {});
-      expect(result!.content[0].text).toContain('Exported 1 memories');
+      expect(result!.content[0].text).toContain('Exported: 1 memories');
     });
   });
 
@@ -261,5 +261,67 @@ describe('handleAdmin', () => {
   it('returns null for unknown tools', async () => {
     const { ctx } = makeCtx();
     expect(await handleAdmin(ctx, 'memoclaw_store', {})).toBeNull();
+  });
+
+  // ── cancellation ─────────────────────────────────────────────────────────
+  describe('cancellation support', () => {
+    it('stops delete_namespace when signal is pre-aborted', async () => {
+      const ac = new AbortController();
+      ac.abort(); // pre-abort so the loop exits on first iteration
+      const api = mockApi({
+        'GET /v1/memories': { memories: [] },
+        'DELETE /v1/memories/': { deleted: true },
+      });
+      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const result = await handleAdmin(ctx, 'memoclaw_delete_namespace', { namespace: 'test' });
+      expect(result!.content[0].text).toContain('Cancelled');
+      expect((result as any).structuredContent.cancelled).toBe(true);
+    });
+
+    it('stops export pagination when signal is aborted', async () => {
+      const ac = new AbortController();
+      let page = 0;
+      const api = mockApiWithErrors(
+        {
+          'GET /v1/memories': () => {
+            page++;
+            if (page >= 2) ac.abort();
+            // Return full page to force pagination
+            return { memories: Array.from({ length: 100 }, (_, i) => ({ id: `p${page}-${i}`, content: 'x' })) };
+          },
+        },
+        { 'GET /v1/export': new Error('HTTP 404: Not Found') },
+      );
+      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const result = await handleAdmin(ctx, 'memoclaw_export', {});
+      expect(result!.content[0].text).toContain('cancelled');
+      expect((result as any).structuredContent.cancelled).toBe(true);
+    });
+
+    it('stops migrate when signal is aborted mid-file', async () => {
+      const ac = new AbortController();
+      let ingestCount = 0;
+      const api = mockApiWithErrors(
+        {
+          'POST /v1/ingest': () => {
+            ingestCount++;
+            if (ingestCount >= 1) ac.abort();
+            return { memories_created: 1 };
+          },
+        },
+        { 'POST /v1/migrate': new Error('HTTP 404: Not Found') },
+      );
+      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const result = await handleAdmin(ctx, 'memoclaw_migrate', {
+        files: [
+          { filename: 'a.md', content: '# A' },
+          { filename: 'b.md', content: '# B' },
+          { filename: 'c.md', content: '# C' },
+        ],
+      });
+      expect(result!.content[0].text).toContain('cancelled');
+      expect((result as any).structuredContent.cancelled).toBe(true);
+      expect((result as any).structuredContent.files_processed).toBeLessThan(3);
+    });
   });
 });

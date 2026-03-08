@@ -24,12 +24,16 @@ export function formatMemory(m: any): string {
 
 /**
  * Run promises with concurrency limit.
+ * If an AbortSignal is provided and aborted, remaining tasks are skipped
+ * and the returned array will contain results only for tasks that started.
  */
-export async function withConcurrency<T>(tasks: (() => Promise<T>)[], limit: number): Promise<PromiseSettledResult<T>[]> {
+export async function withConcurrency<T>(tasks: (() => Promise<T>)[], limit: number, signal?: AbortSignal): Promise<PromiseSettledResult<T>[]> {
   const results: PromiseSettledResult<T>[] = new Array(tasks.length);
   let idx = 0;
+  let cancelled = false;
   async function worker() {
     while (idx < tasks.length) {
+      if (signal?.aborted) { cancelled = true; return; }
       const i = idx++;
       try {
         results[i] = { status: 'fulfilled', value: await tasks[i]() };
@@ -40,6 +44,10 @@ export async function withConcurrency<T>(tasks: (() => Promise<T>)[], limit: num
   }
   const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
   await Promise.all(workers);
+  // If cancelled, trim results to only include started tasks
+  if (cancelled) {
+    return results.slice(0, idx);
+  }
   return results;
 }
 

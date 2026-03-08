@@ -331,4 +331,35 @@ describe('handleMemory', () => {
     const result = await handleMemory(ctx, 'memoclaw_unknown_tool', {});
     expect(result).toBeNull();
   });
+
+  // ── cancellation ─────────────────────────────────────────────────────────
+  describe('cancellation support', () => {
+    it('stops bulk_delete when signal is pre-aborted', async () => {
+      const ac = new AbortController();
+      ac.abort(); // pre-abort
+      const api = mockApiWithErrors(
+        { 'DELETE /v1/memories/': { deleted: true } },
+        { 'POST /v1/memories/bulk-delete': new Error('HTTP 404: Not Found') },
+      );
+      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const ids = Array.from({ length: 20 }, (_, i) => `id-${i}`);
+      const result = await handleMemory(ctx, 'memoclaw_bulk_delete', { ids });
+      expect((result as any).structuredContent.cancelled).toBe(true);
+      expect((result as any).structuredContent.succeeded).toBe(0);
+    });
+
+    it('stops bulk_store when signal is pre-aborted', async () => {
+      const ac = new AbortController();
+      ac.abort(); // pre-abort
+      const api = mockApiWithErrors(
+        { 'POST /v1/store': () => ({ memory: { id: 'm1', content: 'x' } }) },
+        { 'POST /v1/store/batch': new Error('HTTP 404: Not Found') },
+      );
+      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const memories = Array.from({ length: 20 }, (_, i) => ({ content: `memory ${i}` }));
+      const result = await handleMemory(ctx, 'memoclaw_bulk_store', { memories });
+      expect((result as any).structuredContent.cancelled).toBe(true);
+      expect((result as any).structuredContent.succeeded).toBe(0);
+    });
+  });
 });
