@@ -61,6 +61,11 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_list': {
       const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after, before } = args as ListArgs;
+      validateTags(tags);
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(memory_type, 'memory_type');
+      validateIdentifier(session_id, 'session_id');
+      validateIdentifier(agent_id, 'agent_id');
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (offset !== undefined) params.set('offset', String(offset));
@@ -388,6 +393,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       for (const [i, u] of updates.entries()) {
         if (!u.id) throw new Error(`Update at index ${i} is missing "id"`);
         validateImportance(u.importance, `Update at index ${i} importance`);
+        validateTags(u.tags, `Update at index ${i} tags`);
       }
       try {
         const result = await makeRequest('POST', '/v1/memories/batch-update', { updates });

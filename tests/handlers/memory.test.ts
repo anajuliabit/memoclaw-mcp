@@ -98,6 +98,18 @@ describe('handleMemory', () => {
       const path = api.makeRequest.mock.calls[0][1];
       expect(path).toContain('before=2025-06-01T00%3A00%3A00Z');
     });
+
+    it('validates namespace identifier', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleMemory(ctx, 'memoclaw_list', { namespace: 'bad namespace!' }))
+        .rejects.toThrow('namespace contains invalid characters');
+    });
+
+    it('validates tags array', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleMemory(ctx, 'memoclaw_list', { tags: ['valid', ''] }))
+        .rejects.toThrow('tags[1] must be a non-empty string');
+    });
   });
 
   // ── update ───────────────────────────────────────────────────────────────
@@ -329,6 +341,13 @@ describe('handleMemory', () => {
       await expect(handleMemory(ctx, 'memoclaw_batch_update', {
         updates: [{ content: 'no id' }],
       })).rejects.toThrow('missing "id"');
+    });
+
+    it('validates tags in individual updates', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleMemory(ctx, 'memoclaw_batch_update', {
+        updates: [{ id: '1', tags: ['valid', ''] }],
+      })).rejects.toThrow('tags[1] must be a non-empty string');
     });
   });
 

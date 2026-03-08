@@ -139,6 +139,18 @@ describe('handleRecall', () => {
       const result = await handleRecall(ctx, 'memoclaw_suggested', { category: 'personal' });
       expect(result!.content[0].text).toContain('(personal)');
     });
+
+    it('validates namespace identifier', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRecall(ctx, 'memoclaw_suggested', { namespace: 'bad namespace!' }))
+        .rejects.toThrow('namespace contains invalid characters');
+    });
+
+    it('validates category identifier', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRecall(ctx, 'memoclaw_suggested', { category: 'bad cat!' }))
+        .rejects.toThrow('category contains invalid characters');
+    });
   });
 
   describe('memoclaw_check_duplicates', () => {

@@ -258,6 +258,39 @@ describe('handleAdmin', () => {
     });
   });
 
+  // ── input validation consistency ──────────────────────────────────────────
+  describe('input validation', () => {
+    it('consolidate rejects invalid namespace', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleAdmin(ctx, 'memoclaw_consolidate', { namespace: 'bad namespace!' }))
+        .rejects.toThrow('namespace contains invalid characters');
+    });
+
+    it('export rejects invalid agent_id', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleAdmin(ctx, 'memoclaw_export', { agent_id: 'bad agent!' }))
+        .rejects.toThrow('agent_id contains invalid characters');
+    });
+
+    it('tags rejects invalid namespace', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleAdmin(ctx, 'memoclaw_tags', { namespace: '<script>' }))
+        .rejects.toThrow('namespace contains invalid characters');
+    });
+
+    it('namespaces rejects invalid agent_id', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleAdmin(ctx, 'memoclaw_namespaces', { agent_id: 'has spaces' }))
+        .rejects.toThrow('agent_id contains invalid characters');
+    });
+
+    it('core_memories rejects invalid namespace', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleAdmin(ctx, 'memoclaw_core_memories', { namespace: 'a&b' }))
+        .rejects.toThrow('namespace contains invalid characters');
+    });
+  });
+
   it('returns null for unknown tools', async () => {
     const { ctx } = makeCtx();
     expect(await handleAdmin(ctx, 'memoclaw_store', {})).toBeNull();
