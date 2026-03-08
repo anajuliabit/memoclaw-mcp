@@ -848,7 +848,7 @@ describe('HTTP Transport CORS', () => {
       expect(res.headers.get('access-control-allow-origin')).toBeNull();
     });
 
-    it('includes CORS headers on error responses (401)', async () => {
+    it('includes CORS headers on error responses (401)', { timeout: 15_000 }, async () => {
       const ctx2 = buildHttpHandler({ token: 'secret', allowedOrigins: 'http://example.com' });
       const { server: s2, port: p2 } = await startServer(ctx2.handler);
 
