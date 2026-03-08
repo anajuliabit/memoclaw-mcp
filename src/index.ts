@@ -152,7 +152,7 @@ server.setRequestHandler(SetLevelRequestSchema, async (request) => {
 });
 
 // Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args, _meta } = request.params;
   mcpLogger.debug('tool', { event: 'call', tool: name, args });
 
@@ -171,8 +171,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
     : undefined;
 
+  // Pass the abort signal from the MCP protocol layer — it fires when the
+  // client sends notifications/cancelled for this request.
+  const signal = extra?.signal;
+
   try {
-    const result = await handleToolCall(name, args as any, progress);
+    const result = await handleToolCall(name, args as any, progress, signal);
     mcpLogger.debug('tool', { event: 'success', tool: name });
     return result;
   } catch (error) {

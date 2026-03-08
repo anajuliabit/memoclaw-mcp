@@ -945,7 +945,7 @@ describe('Tool Handlers', () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_export', arguments: {} },
     });
-    expect(result.content[0].text).toContain('Exported 150 memories');
+    expect(result.content[0].text).toContain('Exported: 150 memories');
   });
 
   it('export with jsonl format', async () => {

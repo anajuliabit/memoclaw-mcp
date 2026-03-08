@@ -8,7 +8,7 @@ import type {
 } from '../types.js';
 
 export async function handleMemory(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
-  const { makeRequest, progress } = ctx;
+  const { makeRequest, progress, signal } = ctx;
 
   switch (name) {
     case 'memoclaw_store': {
@@ -151,20 +151,24 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
             await progress(deleteProgress, ids.length);
             return result;
           }),
-          10
+          10,
+          signal
         );
-        succeeded = results.filter(r => r.status === 'fulfilled').length;
-        failed = results.filter(r => r.status === 'rejected').length;
+        succeeded = results.filter(r => r?.status === 'fulfilled').length;
+        failed = results.filter(r => r?.status === 'rejected').length;
         errors = results
-          .map((r, i) => r.status === 'rejected' ? `${ids[i]}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
+          .map((r, i) => r?.status === 'rejected' ? `${ids[i]}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
           .filter(Boolean) as string[];
       }
 
-      let text = `🗑️ Bulk delete: ${succeeded} succeeded, ${failed} failed`;
+      const bulkDeleteCancelled = signal.aborted && (succeeded + failed) < ids.length;
+      let text = bulkDeleteCancelled
+        ? `⚠️ Bulk delete cancelled: ${succeeded} of ${ids.length} succeeded, ${failed} failed`
+        : `🗑️ Bulk delete: ${succeeded} succeeded, ${failed} failed`;
       if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
       return {
         content: [userAndAssistantText(text)],
-        structuredContent: { succeeded, failed, errors },
+        structuredContent: { succeeded, failed, errors, cancelled: bulkDeleteCancelled },
       };
     }
 
@@ -233,22 +237,26 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           await progress(storeProgress, memories.length);
           return result;
         }),
-        10
+        10,
+        signal
       );
-      const succeeded = results.filter(r => r.status === 'fulfilled');
-      const failed = results.filter(r => r.status === 'rejected');
+      const succeeded = results.filter(r => r?.status === 'fulfilled');
+      const failed = results.filter(r => r?.status === 'rejected');
       const stored = succeeded.map(r => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value);
       const errors = failed.map((r) => {
         const idx = results.indexOf(r);
         return `index ${idx}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
       });
-      let text = `✅ Bulk store: ${succeeded.length} stored, ${failed.length} failed`;
+      const bulkStoreCancelled = signal.aborted && (succeeded.length + failed.length) < memories.length;
+      let text = bulkStoreCancelled
+        ? `⚠️ Bulk store cancelled: ${succeeded.length} of ${memories.length} stored, ${failed.length} failed`
+        : `✅ Bulk store: ${succeeded.length} stored, ${failed.length} failed`;
       if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
       if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
       const resourceLinks = stored.filter((m: any) => m?.id).map((m: any) => memoryResourceLink(m.id, 'Stored memory'));
       return {
         content: [userAndAssistantText(text), ...resourceLinks],
-        structuredContent: { succeeded: succeeded.length, failed: failed.length, memories: stored, errors },
+        structuredContent: { succeeded: succeeded.length, failed: failed.length, memories: stored, errors, cancelled: bulkStoreCancelled },
       };
     }
 
@@ -319,18 +327,22 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           await progress(importProgress, memories.length);
           return result;
         }),
-        10
+        10,
+        signal
       );
-      const succeeded = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+      const succeeded = results.filter(r => r?.status === 'fulfilled').length;
+      const failed = results.filter(r => r?.status === 'rejected').length;
       const errors = results
-        .map((r, i) => r.status === 'rejected' ? `index ${i}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
+        .map((r, i) => r?.status === 'rejected' ? `index ${i}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
         .filter(Boolean);
-      let text = `📥 Import: ${succeeded} stored, ${failed} failed`;
+      const importCancelled = signal.aborted && (succeeded + failed) < memories.length;
+      let text = importCancelled
+        ? `⚠️ Import cancelled: ${succeeded} of ${memories.length} stored, ${failed} failed`
+        : `📥 Import: ${succeeded} stored, ${failed} failed`;
       if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
       return {
         content: [userAndAssistantText(text)],
-        structuredContent: { succeeded, failed, errors },
+        structuredContent: { succeeded, failed, errors, cancelled: importCancelled },
       };
     }
 
@@ -404,24 +416,28 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
               await progress(updateProgress, updates.length);
               return result;
             }),
-            10
+            10,
+            signal
           );
-          const succeeded = results.filter(r => r.status === 'fulfilled');
-          const failed = results.filter(r => r.status === 'rejected');
+          const succeeded = results.filter(r => r?.status === 'fulfilled');
+          const failed = results.filter(r => r?.status === 'rejected');
           const memories = succeeded.map(r => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value);
           const errors = failed.map((r) => {
             const idx = results.indexOf(r);
             return `${updates[idx]?.id}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
           });
-          let text = `✅ Batch update: ${succeeded.length} updated, ${failed.length} failed`;
+          const batchCancelled = signal.aborted && (succeeded.length + failed.length) < updates.length;
+          let text = batchCancelled
+            ? `⚠️ Batch update cancelled: ${succeeded.length} of ${updates.length} updated, ${failed.length} failed`
+            : `✅ Batch update: ${succeeded.length} updated, ${failed.length} failed`;
           if (memories.length > 0) text += `\n\n${memories.map((m: any) => formatMemory(m)).join('\n\n')}`;
           if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
           const fallbackResourceLinks = updates
-            .filter((_u: any, i: number) => results[i].status === 'fulfilled')
+            .filter((_u: any, i: number) => results[i]?.status === 'fulfilled')
             .map((u: any) => memoryResourceLink(u.id, 'Updated memory'));
           return {
             content: [userAndAssistantText(text), ...fallbackResourceLinks],
-            structuredContent: { updated: succeeded.length, failed: failed.length, memories, errors },
+            structuredContent: { updated: succeeded.length, failed: failed.length, memories, errors, cancelled: batchCancelled },
           };
         }
         throw err;
@@ -455,6 +471,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
             let offset = 0;
             const pageSize = 100;
             while (offset < 10000) {
+              if (signal.aborted) break;
               const pageParams = new URLSearchParams(params);
               pageParams.set('limit', String(pageSize));
               pageParams.set('offset', String(offset));

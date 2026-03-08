@@ -3,6 +3,7 @@ import { join, extname, basename } from 'node:path';
 import { formatMemory, withConcurrency, validateContentLength, validateImportance, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
 import { validateIdentifier, validateId } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
+import { throwIfCancelled, CancellationError } from './types.js';
 import type {
   StatusArgs, InitArgs, IngestArgs, ExtractArgs, ConsolidateArgs,
   ExportArgs, MigrateArgs, DeleteNamespaceArgs, TagsArgs, HistoryArgs,
@@ -10,7 +11,7 @@ import type {
 } from '../types.js';
 
 export async function handleAdmin(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
-  const { makeRequest, account, config, progress } = ctx;
+  const { makeRequest, account, config, progress, signal } = ctx;
 
   switch (name) {
     case 'memoclaw_status': {
@@ -154,7 +155,9 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         let offset = 0;
         const pageSize = 100;
         let exportPage = 0;
+        let exportCancelled = false;
         while (true) {
+          if (signal.aborted) { exportCancelled = true; break; }
           exportPage++;
           const fallbackParams = new URLSearchParams();
           fallbackParams.set('limit', String(pageSize));
@@ -171,12 +174,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const output = fmt === 'jsonl'
           ? allMemories.map((m: any) => JSON.stringify(m)).join('\n')
           : JSON.stringify(allMemories, null, 2);
+        const exportPrefix = exportCancelled ? '⚠️ Export cancelled — partial result' : '📦 Exported';
         return {
           content: [
-            userAndAssistantText(`📦 Exported ${allMemories.length} memories`),
+            userAndAssistantText(`${exportPrefix}: ${allMemories.length} memories`),
             assistantText(output),
           ],
-          structuredContent: { memories: allMemories, count: allMemories.length },
+          structuredContent: { memories: allMemories, count: allMemories.length, cancelled: exportCancelled },
         };
       }
     }
@@ -253,8 +257,11 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
             };
           }
           let totalCreated = 0;
+          let filesProcessed = 0;
           const errors: string[] = [];
+          let migrateCancelled = false;
           for (let fi = 0; fi < fileList.length; fi++) {
+            if (signal.aborted) { migrateCancelled = true; break; }
             const file = fileList[fi];
             try {
               const r = await makeRequest('POST', '/v1/ingest', {
@@ -266,13 +273,17 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
             } catch (e: any) {
               errors.push(`${file.filename}: ${e.message}`);
             }
+            filesProcessed++;
             await progress(fi + 1, fileList.length);
           }
-          let text = `✅ Migration complete (via ingest fallback)\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${totalCreated}`;
+          const migratePrefix = migrateCancelled
+            ? `⚠️ Migration cancelled after ${filesProcessed} of ${fileList.length} files (via ingest fallback)`
+            : `✅ Migration complete (via ingest fallback)\n\n📁 Files processed: ${fileList.length}`;
+          let text = `${migratePrefix}\n📝 Memories created: ${totalCreated}`;
           if (errors.length > 0) text += `\n\n❌ Errors:\n${errors.join('\n')}`;
           return {
             content: [userAndAssistantText(text)],
-            structuredContent: { files_processed: fileList.length, memories_created: totalCreated, duplicates_skipped: 0, memories: [] },
+            structuredContent: { files_processed: filesProcessed, memories_created: totalCreated, duplicates_skipped: 0, memories: [], cancelled: migrateCancelled },
           };
         }
         throw err;
@@ -289,8 +300,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const failedIds = new Set<string>();
       let pages = 0;
       const pageSize = 100;
+      let nsCancelled = false;
 
       while (pages < 200) {
+        if (signal.aborted) { nsCancelled = true; break; }
         pages++;
         const params = new URLSearchParams();
         params.set('limit', String(pageSize));
@@ -304,10 +317,12 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (toDelete.length === 0) break;
         const deleteResults = await withConcurrency(
           toDelete.map((m: any) => () => makeRequest('DELETE', `/v1/memories/${m.id}`)),
-          10
+          10,
+          signal
         );
         let pageSuccesses = 0;
         for (let i = 0; i < deleteResults.length; i++) {
+          if (!deleteResults[i]) continue; // skipped due to cancellation
           if (deleteResults[i].status === 'fulfilled') {
             deletedIds.push(toDelete[i].id);
             pageSuccesses++;
@@ -317,15 +332,18 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           }
         }
         await progress(deletedIds.length, deletedIds.length + (memories.length >= pageSize ? pageSize : 0));
+        if (signal.aborted) { nsCancelled = true; break; }
         if (memories.length < pageSize) break;
         if (pageSuccesses === 0) break;
       }
 
-      let text = `🗑️ Namespace "${namespace}": ${deletedIds.length} memories deleted`;
+      const nsPrefix = nsCancelled ? '⚠️ Cancelled — partial deletion' : '🗑️';
+      let text = `${nsPrefix} Namespace "${namespace}": ${deletedIds.length} memories deleted`;
+      if (nsCancelled) text += ` before cancellation`;
       if (errors.length > 0) text += `, ${errors.length} failed\n\nErrors:\n${errors.slice(0, 10).join('\n')}`;
       return {
         content: [userAndAssistantText(text)],
-        structuredContent: { deleted: deletedIds.length, failed: errors.length, namespace, errors: errors.slice(0, 10) },
+        structuredContent: { deleted: deletedIds.length, failed: errors.length, namespace, errors: errors.slice(0, 10), cancelled: nsCancelled },
       };
     }
 
@@ -352,6 +370,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       let offset = 0;
       const pageSize = 100;
       for (let page = 0; page < 200; page++) {
+        if (signal.aborted) break;
         const params = new URLSearchParams();
         params.set('limit', String(pageSize));
         params.set('offset', String(offset));
@@ -427,6 +446,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       let offset = 0;
       const pageSize = 100;
       for (let page = 0; page < 200; page++) {
+        if (signal.aborted) break;
         const params = new URLSearchParams();
         params.set('limit', String(pageSize));
         params.set('offset', String(offset));
