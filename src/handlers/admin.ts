@@ -107,6 +107,8 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_consolidate': {
       const { namespace, min_similarity, mode, dry_run, agent_id } = args as ConsolidateArgs;
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(agent_id, 'agent_id');
       const body: any = {};
       if (namespace) body.namespace = namespace;
       if (agent_id) body.agent_id = agent_id;
@@ -126,6 +128,8 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_export': {
       const { namespace, agent_id, format: fmt } = args as ExportArgs;
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(agent_id, 'agent_id');
       const params = new URLSearchParams();
       if (namespace) params.set('namespace', namespace);
       if (agent_id) params.set('agent_id', agent_id);
@@ -349,6 +353,8 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_tags': {
       const { namespace, agent_id } = args as TagsArgs;
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(agent_id, 'agent_id');
       try {
         const params = new URLSearchParams();
         if (namespace) params.set('namespace', namespace);
@@ -426,6 +432,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_namespaces': {
       const { agent_id } = args as NamespacesArgs;
+      validateIdentifier(agent_id, 'agent_id');
       try {
         const params = new URLSearchParams();
         if (agent_id) params.set('agent_id', agent_id);
@@ -470,6 +477,8 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_core_memories': {
       const { limit, namespace, agent_id } = args as CoreMemoriesArgs;
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(agent_id, 'agent_id');
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (namespace) params.set('namespace', namespace);

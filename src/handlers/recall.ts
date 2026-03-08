@@ -100,6 +100,10 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_suggested': {
       const { limit, namespace, session_id, agent_id, category } = args as SuggestedArgs;
+      validateIdentifier(namespace, 'namespace');
+      validateIdentifier(session_id, 'session_id');
+      validateIdentifier(agent_id, 'agent_id');
+      validateIdentifier(category, 'category');
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (namespace) params.set('namespace', namespace);
