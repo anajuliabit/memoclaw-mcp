@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { validateIdentifier, validateId, validateTags, validateQuery, validateISODate, validatePaginationParam } from '../src/validate.js';
+import {
+  validateIdentifier,
+  validateId,
+  validateTags,
+  validateQuery,
+  validateISODate,
+  validatePaginationParam,
+} from '../src/validate.js';
 
 describe('validateIdentifier', () => {
   it('returns undefined for undefined/null/empty', () => {

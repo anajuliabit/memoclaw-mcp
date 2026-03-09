@@ -94,11 +94,7 @@ const DEFAULT_MAX_OFFSET = 100000;
  * Must be a non-negative integer within bounds.
  * Returns undefined if value is falsy (optional params), throws on invalid.
  */
-export function validatePaginationParam(
-  value: unknown,
-  label: string,
-  max?: number,
-): number | undefined {
+export function validatePaginationParam(value: unknown, label: string, max?: number): number | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'number') {
     throw new Error(`${label} must be a number`);

@@ -1,5 +1,11 @@
 import { formatMemory, userAndAssistantText, assistantText, userText } from '../format.js';
-import { validateIdentifier, validateTags, validateQuery, validateISODate, validatePaginationParam } from '../validate.js';
+import {
+  validateIdentifier,
+  validateTags,
+  validateQuery,
+  validateISODate,
+  validatePaginationParam,
+} from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
 

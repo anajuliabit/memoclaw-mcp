@@ -198,7 +198,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 });
 
 /** Error codes for structured error responses (MCP 2025-06-18). */
-type ErrorCode = 'VALIDATION_ERROR' | 'API_ERROR' | 'TIMEOUT' | 'RATE_LIMITED' | 'PAYMENT_REQUIRED' | 'CANCELLED' | 'UNKNOWN';
+type ErrorCode =
+  | 'VALIDATION_ERROR'
+  | 'API_ERROR'
+  | 'TIMEOUT'
+  | 'RATE_LIMITED'
+  | 'PAYMENT_REQUIRED'
+  | 'CANCELLED'
+  | 'UNKNOWN';
 
 /**
  * Classify an error into a structured error code.
@@ -239,7 +246,12 @@ function classifyError(error: unknown): ErrorCode {
   }
 
   // Timeout
-  if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('etimedout') || msg.includes('econnaborted')) {
+  if (
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('etimedout') ||
+    msg.includes('econnaborted')
+  ) {
     return 'TIMEOUT';
   }
 
