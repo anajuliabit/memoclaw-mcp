@@ -1,7 +1,7 @@
 /**
  * Tests for MCP progress notifications in long-running handlers.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createHandler } from '../src/handlers/index.js';
 import type { ProgressCallback } from '../src/handlers/types.js';
 

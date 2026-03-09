@@ -3,18 +3,14 @@ import { join, extname, basename } from 'node:path';
 import {
   formatMemory,
   withConcurrency,
-  validateContentLength,
-  validateImportance,
   userAndAssistantText,
   assistantText,
   userText,
   memoryResourceLink,
 } from '../format.js';
-import { validateIdentifier, validateId, validateISODate } from '../validate.js';
+import { validateIdentifier, validateId } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
-  StatusArgs,
-  InitArgs,
   IngestArgs,
   ExtractArgs,
   ConsolidateArgs,
@@ -25,7 +21,6 @@ import type {
   HistoryArgs,
   NamespacesArgs,
   CoreMemoriesArgs,
-  StatsArgs,
 } from '../types.js';
 
 export async function handleAdmin(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
@@ -174,14 +169,12 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const allMemories: any[] = [];
         let offset = 0;
         const pageSize = 100;
-        let exportPage = 0;
         let exportCancelled = false;
         while (true) {
           if (signal.aborted) {
             exportCancelled = true;
             break;
           }
-          exportPage++;
           const fallbackParams = new URLSearchParams();
           fallbackParams.set('limit', String(pageSize));
           fallbackParams.set('offset', String(offset));

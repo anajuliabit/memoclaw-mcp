@@ -83,12 +83,14 @@ describe('RateLimiter', () => {
 
 // --- HTTP integration tests ---
 
-function buildRateLimitedHandler(opts: {
-  perIpLimit?: number;
-  globalLimit?: number;
-  sessionLimit?: number;
-  windowMs?: number;
-} = {}) {
+function buildRateLimitedHandler(
+  opts: {
+    perIpLimit?: number;
+    globalLimit?: number;
+    sessionLimit?: number;
+    windowMs?: number;
+  } = {},
+) {
   const config = {
     perIpLimit: opts.perIpLimit ?? 5,
     globalLimit: opts.globalLimit ?? 20,
@@ -168,7 +170,9 @@ function buildRateLimitedHandler(opts: {
   };
 }
 
-function startServer(handler: (req: IncomingMessage, res: ServerResponse) => void): Promise<{ server: HttpServer; port: number }> {
+function startServer(
+  handler: (req: IncomingMessage, res: ServerResponse) => void,
+): Promise<{ server: HttpServer; port: number }> {
   return new Promise((resolve) => {
     const server = createServer(handler);
     server.listen(0, () => {

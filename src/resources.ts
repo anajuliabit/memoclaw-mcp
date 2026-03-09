@@ -14,7 +14,6 @@
 
 import type { ApiClient } from './api.js';
 import type { Config } from './config.js';
-import { formatMemory } from './format.js';
 
 /** Static resource list returned by resources/list */
 export const RESOURCES = [

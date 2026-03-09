@@ -96,7 +96,7 @@ export function validateContentLength(content: string, label = 'content'): void 
 // Content annotation helpers (MCP 2025-06-18)
 // ---------------------------------------------------------------------------
 
-import type { ContentAnnotations, TextContentItem, ResourceLinkContentItem } from './handlers/types.js';
+import type { TextContentItem, ResourceLinkContentItem } from './handlers/types.js';
 
 /**
  * Build a text content item intended for both user and assistant display.

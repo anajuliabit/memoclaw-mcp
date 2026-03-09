@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { handleMemory } from '../../src/handlers/memory.js';
 import { createContext } from '../../src/handlers/types.js';
 import { mockApi, mockApiWithErrors, testConfig } from './helpers.js';
