@@ -57,8 +57,8 @@ class MockStreamableHTTPServerTransport {
 }
 
 /** Build the HTTP handler extracted from index.ts logic */
-function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigins?: string } = {}) {
-  const { token, version = '1.14.0', allowedOrigins: originsEnv } = opts;
+function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigins?: string; maxBodySize?: number } = {}) {
+  const { token, version = '1.14.0', allowedOrigins: originsEnv, maxBodySize = 1048576 } = opts;
   const sessions = new Map<string, MockStreamableHTTPServerTransport>();
   const sessionActivity = new Map<string, number>();
 
@@ -96,6 +96,45 @@ function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigi
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id');
     res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
     res.setHeader('Access-Control-Max-Age', '86400');
+  }
+
+  /** Check Content-Length header upfront */
+  function checkBodySize(req: IncomingMessage, res: ServerResponse): boolean {
+    const contentLength = req.headers['content-length'];
+    if (contentLength) {
+      const len = parseInt(contentLength, 10);
+      if (!isNaN(len) && len > maxBodySize) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `Request body too large. Maximum allowed size is ${maxBodySize} bytes.`,
+        }));
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Enforce body size limit on streaming request bodies */
+  function enforceBodyLimit(req: IncomingMessage, res: ServerResponse): void {
+    let received = 0;
+    const originalEmit = req.emit.bind(req);
+    req.emit = function (event: string, ...args: any[]) {
+      if (event === 'data') {
+        const chunk = args[0] as Buffer;
+        received += chunk.length;
+        if (received > maxBodySize) {
+          req.destroy();
+          if (!res.headersSent) {
+            res.writeHead(413, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: `Request body too large. Maximum allowed size is ${maxBodySize} bytes.`,
+            }));
+          }
+          return false;
+        }
+      }
+      return originalEmit(event, ...args);
+    } as any;
   }
 
   return {
@@ -142,6 +181,12 @@ function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigi
 
       // MCP endpoint
       if (url.pathname === '/mcp') {
+        // Enforce request body size limit for POST requests
+        if (req.method === 'POST') {
+          if (checkBodySize(req, res)) return;
+          enforceBodyLimit(req, res);
+        }
+
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
         if (req.method === 'DELETE') {
@@ -913,6 +958,119 @@ describe('HTTP Transport CORS', () => {
 
       expect(res.status).toBe(204);
       expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    });
+  });
+
+  describe('Request body size limit', () => {
+    let server: HttpServer;
+    let port: number;
+
+    describe('with default limit (1MB)', () => {
+      let ctx: ReturnType<typeof buildHttpHandler>;
+
+      beforeEach(async () => {
+        ctx = buildHttpHandler();
+        const result = await startServer(ctx.handler);
+        server = result.server;
+        port = result.port;
+      });
+
+      afterEach(async () => {
+        await stopServer(server);
+      });
+
+      it('accepts requests within the size limit', async () => {
+        const body = JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 });
+        const res = await fetch(`http://localhost:${port}/mcp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+
+        expect(res.status).toBe(200);
+      });
+
+      it('rejects requests with Content-Length exceeding limit', async () => {
+        // Use raw HTTP to send a mismatched Content-Length header (fetch won't allow this)
+        const { request } = await import('node:http');
+        const result = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+          const req = request(`http://localhost:${port}/mcp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': '2097152', // 2MB claimed
+            },
+          }, (res) => {
+            let data = '';
+            res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+            res.on('end', () => resolve({ status: res.statusCode!, body: data }));
+          });
+          req.on('error', reject);
+          // Send a small body but with a large Content-Length header
+          req.write('{}');
+          req.end();
+        });
+
+        expect(result.status).toBe(413);
+        const json = JSON.parse(result.body);
+        expect(json.error).toContain('Request body too large');
+        expect(json.error).toContain('1048576');
+      });
+
+      it('does not enforce body size limit on non-POST methods', async () => {
+        // GET and DELETE should not be affected
+        const res = await fetch(`http://localhost:${port}/mcp`, {
+          method: 'GET',
+        });
+
+        // Should get 400 (no session), not 413
+        expect(res.status).toBe(400);
+      });
+    });
+
+    describe('with custom small limit', () => {
+      let ctx: ReturnType<typeof buildHttpHandler>;
+
+      beforeEach(async () => {
+        ctx = buildHttpHandler({ maxBodySize: 100 }); // 100 bytes
+        const result = await startServer(ctx.handler);
+        server = result.server;
+        port = result.port;
+      });
+
+      afterEach(async () => {
+        await stopServer(server);
+      });
+
+      it('rejects requests exceeding the custom limit via Content-Length', async () => {
+        const largeBody = JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'initialize',
+          id: 1,
+          params: { data: 'x'.repeat(200) },
+        });
+        const res = await fetch(`http://localhost:${port}/mcp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: largeBody,
+        });
+
+        expect(res.status).toBe(413);
+        const json = await res.json() as any;
+        expect(json.error).toContain('100 bytes');
+      });
+
+      it('accepts requests within the custom limit', async () => {
+        const smallBody = JSON.stringify({ jsonrpc: '2.0', id: 1 });
+        const res = await fetch(`http://localhost:${port}/mcp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: smallBody,
+        });
+
+        // Should pass body size check (200 from mock transport)
+        expect(res.status).toBe(200);
+      });
     });
   });
 });
