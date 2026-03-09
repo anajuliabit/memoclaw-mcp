@@ -28,6 +28,7 @@ import { PROMPTS, createPromptHandler } from './prompts.js';
 import { createCompletionHandler } from './completions.js';
 import { mcpLogger } from './logging.js';
 import type { LogLevel } from './logging.js';
+import { RateLimiter, loadRateLimitConfig, getClientIp } from './rate-limiter.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -254,6 +255,10 @@ async function main() {
 
     const httpToken = getHttpToken();
 
+    // Rate limiting
+    const rateLimitConfig = loadRateLimitConfig();
+    const rateLimiter = new RateLimiter();
+
     /**
      * Allowed origins for HTTP transport.
      * Validates Origin header to prevent DNS rebinding attacks.
@@ -397,6 +402,33 @@ async function main() {
 
       // MCP endpoint
       if (url.pathname === '/mcp') {
+        // Rate limiting (per-IP and global)
+        const clientIp = getClientIp(req);
+
+        // Check global rate limit
+        const globalCheck = rateLimiter.check('__global__', rateLimitConfig.globalLimit, rateLimitConfig.windowMs);
+        if (!globalCheck.allowed) {
+          const retryAfter = Math.ceil(globalCheck.retryAfterMs / 1000);
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter),
+          });
+          res.end(JSON.stringify({ error: 'Too many requests (global limit). Try again later.' }));
+          return;
+        }
+
+        // Check per-IP rate limit
+        const ipCheck = rateLimiter.check(`ip:${clientIp}`, rateLimitConfig.perIpLimit, rateLimitConfig.windowMs);
+        if (!ipCheck.allowed) {
+          const retryAfter = Math.ceil(ipCheck.retryAfterMs / 1000);
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter),
+          });
+          res.end(JSON.stringify({ error: 'Too many requests. Try again later.' }));
+          return;
+        }
+
         // Enforce request body size limit for POST requests (prevents DoS via large payloads)
         if (req.method === 'POST') {
           if (checkBodySize(req, res)) return;
@@ -433,6 +465,18 @@ async function main() {
           // GET without valid session → error (SSE needs an existing session)
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Invalid or missing session ID. Send a POST first to initialize.' }));
+          return;
+        }
+
+        // Check session creation rate limit (per-IP)
+        const sessionCheck = rateLimiter.check(`session:${clientIp}`, rateLimitConfig.sessionLimit, rateLimitConfig.windowMs);
+        if (!sessionCheck.allowed) {
+          const retryAfter = Math.ceil(sessionCheck.retryAfterMs / 1000);
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter),
+          });
+          res.end(JSON.stringify({ error: 'Too many new sessions. Try again later.' }));
           return;
         }
 
