@@ -1,5 +1,5 @@
 import { formatMemory, userAndAssistantText, assistantText, userText } from '../format.js';
-import { validateIdentifier, validateTags, validateQuery } from '../validate.js';
+import { validateIdentifier, validateTags, validateQuery, validateISODate } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
 
@@ -15,6 +15,8 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(memory_type, 'memory_type');
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
+      validateISODate(after, 'after');
+      validateISODate(before, 'before');
       const filters: Record<string, any> = {};
       if (tags) filters.tags = tags;
       if (memory_type) filters.memory_type = memory_type;
@@ -47,6 +49,8 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(memory_type, 'memory_type');
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
+      validateISODate(after, 'after');
+      validateISODate(before, 'before');
       const params = new URLSearchParams();
       params.set('q', query);
       if (limit !== undefined) params.set('limit', String(limit));

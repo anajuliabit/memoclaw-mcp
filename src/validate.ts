@@ -84,3 +84,22 @@ export function validateQuery(value: unknown, label = 'query'): string {
   }
   return value;
 }
+
+/**
+ * Validate an ISO 8601 date string parameter (expires_at, after, before).
+ * Returns undefined if value is falsy (optional params), throws on invalid.
+ * Accepts any string that `new Date()` can parse to a valid date.
+ */
+export function validateISODate(value: unknown, label: string): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') {
+    throw new Error(`${label} must be a string`);
+  }
+  const date = new Date(value);
+  if (isNaN(date.getTime())) {
+    throw new Error(
+      `${label} is not a valid date. Use ISO 8601 format, e.g. "2025-12-31T23:59:59Z".`
+    );
+  }
+  return value;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateIdentifier, validateId, validateTags, validateQuery } from '../src/validate.js';
+import { validateIdentifier, validateId, validateTags, validateQuery, validateISODate } from '../src/validate.js';
 
 describe('validateIdentifier', () => {
   it('returns undefined for undefined/null/empty', () => {
@@ -93,5 +93,31 @@ describe('validateQuery', () => {
     expect(() => validateQuery(undefined)).toThrow('required');
     expect(() => validateQuery('')).toThrow('required');
     expect(() => validateQuery('   ')).toThrow('required');
+  });
+});
+
+describe('validateISODate', () => {
+  it('returns undefined for undefined/null/empty', () => {
+    expect(validateISODate(undefined, 'expires_at')).toBeUndefined();
+    expect(validateISODate(null, 'expires_at')).toBeUndefined();
+    expect(validateISODate('', 'expires_at')).toBeUndefined();
+  });
+
+  it('accepts valid ISO 8601 dates', () => {
+    expect(validateISODate('2025-12-31T23:59:59Z', 'expires_at')).toBe('2025-12-31T23:59:59Z');
+    expect(validateISODate('2025-01-01T00:00:00.000Z', 'after')).toBe('2025-01-01T00:00:00.000Z');
+    expect(validateISODate('2025-06-15', 'before')).toBe('2025-06-15');
+    expect(validateISODate('2025-03-09T01:28:00+00:00', 'after')).toBe('2025-03-09T01:28:00+00:00');
+  });
+
+  it('rejects non-string values', () => {
+    expect(() => validateISODate(123, 'expires_at')).toThrow('must be a string');
+    expect(() => validateISODate(true, 'expires_at')).toThrow('must be a string');
+  });
+
+  it('rejects invalid date strings', () => {
+    expect(() => validateISODate('not-a-date', 'expires_at')).toThrow('not a valid date');
+    expect(() => validateISODate('2025-13-45', 'after')).toThrow('not a valid date');
+    expect(() => validateISODate('yesterday', 'before')).toThrow('not a valid date');
   });
 });

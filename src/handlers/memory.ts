@@ -1,11 +1,99 @@
 import { formatMemory, withConcurrency, validateContentLength, validateImportance, UPDATE_FIELDS, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
-import { validateIdentifier, validateId, validateTags } from '../validate.js';
+import { validateIdentifier, validateId, validateTags, validateISODate } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   StoreArgs, GetArgs, ListArgs, UpdateArgs, DeleteArgs,
   BulkDeleteArgs, BulkStoreArgs, ImportArgs, PinArgs, UnpinArgs,
   BatchUpdateArgs, CountArgs,
 } from '../types.js';
+
+/**
+ * Shared helper for bulk store operations (memoclaw_bulk_store and memoclaw_import).
+ * Tries the batch API endpoint first, then falls back to one-by-one with concurrency.
+ */
+async function bulkStoreWithFallback(
+  ctx: HandlerContext,
+  memories: any[],
+  fields: string[],
+  prefix: string,
+  session_id?: string,
+  agent_id?: string,
+  resourceLinkName = 'Stored memory',
+): Promise<ToolResult> {
+  const { makeRequest, progress, signal } = ctx;
+
+  // Try batch API endpoint first (single request)
+  try {
+    const batchBody: any = {
+      memories: memories.map((m: any) => {
+        const item: any = {};
+        for (const key of fields) {
+          if (m[key] !== undefined) item[key] = m[key];
+        }
+        if (session_id) item.session_id = session_id;
+        if (agent_id) item.agent_id = agent_id;
+        return item;
+      }),
+    };
+    const result = await makeRequest('POST', '/v1/store/batch', batchBody);
+    const stored = result.memories || result.data || [];
+    const failedItems = result.failed || [];
+    const errors: string[] = [];
+    let text = `${prefix}: ${stored.length} stored, ${failedItems.length} failed`;
+    if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
+    if (failedItems.length > 0) {
+      for (const f of failedItems) errors.push(`index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
+      text += `\n\nErrors:\n${errors.join('\n')}`;
+    }
+    const resourceLinks = stored.filter((m: any) => m.id).map((m: any) => memoryResourceLink(m.id, resourceLinkName));
+    return {
+      content: [userAndAssistantText(text), ...resourceLinks],
+      structuredContent: { succeeded: stored.length, failed: failedItems.length, memories: stored, errors },
+    };
+  } catch (batchErr: any) {
+    // Fall back to one-by-one if batch endpoint is unavailable (404)
+    if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
+      throw batchErr;
+    }
+  }
+
+  // Fallback: store one-by-one with concurrency
+  let storeProgress = 0;
+  const results = await withConcurrency(
+    memories.map((m: any) => async () => {
+      const body: any = {};
+      for (const key of fields) {
+        if (m[key] !== undefined) body[key] = m[key];
+      }
+      if (session_id) body.session_id = session_id;
+      if (agent_id) body.agent_id = agent_id;
+      const result = await makeRequest('POST', '/v1/store', body);
+      storeProgress++;
+      await progress(storeProgress, memories.length);
+      return result;
+    }),
+    10,
+    signal
+  );
+  const succeeded = results.filter(r => r?.status === 'fulfilled');
+  const failed = results.filter(r => r?.status === 'rejected');
+  const stored = succeeded.map(r => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value);
+  const errors = failed.map((r) => {
+    const idx = results.indexOf(r);
+    return `index ${idx}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
+  });
+  const cancelled = signal.aborted && (succeeded.length + failed.length) < memories.length;
+  let text = cancelled
+    ? `⚠️ ${prefix} cancelled: ${succeeded.length} of ${memories.length} stored, ${failed.length} failed`
+    : `${prefix}: ${succeeded.length} stored, ${failed.length} failed`;
+  if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
+  if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
+  const resourceLinks = stored.filter((m: any) => m?.id).map((m: any) => memoryResourceLink(m.id, resourceLinkName));
+  return {
+    content: [userAndAssistantText(text), ...resourceLinks],
+    structuredContent: { succeeded: succeeded.length, failed: failed.length, memories: stored, errors, cancelled },
+  };
+}
 
 export async function handleMemory(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
   const { makeRequest, progress, signal } = ctx;
@@ -23,6 +111,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(memory_type, 'memory_type');
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
+      validateISODate(expires_at, 'expires_at');
       const body: any = { content };
       if (importance !== undefined) body.importance = importance;
       if (tags) body.tags = tags;
@@ -66,6 +155,8 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(memory_type, 'memory_type');
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
+      validateISODate(after, 'after');
+      validateISODate(before, 'before');
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (offset !== undefined) params.set('offset', String(offset));
@@ -108,6 +199,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(updateFields.session_id, 'session_id');
       validateIdentifier(updateFields.agent_id, 'agent_id');
       validateTags(updateFields.tags);
+      validateISODate(updateFields.expires_at, 'expires_at');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
       const memory = result.memory || result;
       return {
@@ -195,79 +287,11 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         validateContentLength(m.content, `Memory at index ${i}`);
         validateImportance(m.importance, `Memory at index ${i} importance`);
       }
-      const STORE_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable'];
-
-      // Try batch API endpoint first (single request), fall back to one-by-one
-      try {
-        const batchBody: any = {
-          memories: memories.map((m: any) => {
-            const item: any = {};
-            for (const key of STORE_FIELDS) {
-              if (m[key] !== undefined) item[key] = m[key];
-            }
-            if (session_id) item.session_id = session_id;
-            if (agent_id) item.agent_id = agent_id;
-            return item;
-          }),
-        };
-        const result = await makeRequest('POST', '/v1/store/batch', batchBody);
-        const stored = result.memories || result.data || [];
-        const failedItems = result.failed || [];
-        let text = `✅ Bulk store: ${stored.length} stored, ${failedItems.length} failed`;
-        if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
-        const bulkErrors: string[] = [];
-        if (failedItems.length > 0) {
-          for (const f of failedItems) bulkErrors.push(`index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
-          text += `\n\nErrors:\n${bulkErrors.join('\n')}`;
-        }
-        const resourceLinks = stored.filter((m: any) => m.id).map((m: any) => memoryResourceLink(m.id, 'Stored memory'));
-        return {
-          content: [userAndAssistantText(text), ...resourceLinks],
-          structuredContent: { succeeded: stored.length, failed: failedItems.length, memories: stored, errors: bulkErrors },
-        };
-      } catch (batchErr: any) {
-        // Fall back to one-by-one if batch endpoint is unavailable (404)
-        if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
-          throw batchErr;
-        }
-      }
-
-      // Fallback: store one-by-one with concurrency
-      let storeProgress = 0;
-      const results = await withConcurrency(
-        memories.map((m: any) => async () => {
-          const body: any = {};
-          for (const key of STORE_FIELDS) {
-            if (m[key] !== undefined) body[key] = m[key];
-          }
-          if (session_id) body.session_id = session_id;
-          if (agent_id) body.agent_id = agent_id;
-          const result = await makeRequest('POST', '/v1/store', body);
-          storeProgress++;
-          await progress(storeProgress, memories.length);
-          return result;
-        }),
-        10,
-        signal
+      return bulkStoreWithFallback(
+        ctx, memories,
+        ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable'],
+        '✅ Bulk store', session_id, agent_id,
       );
-      const succeeded = results.filter(r => r?.status === 'fulfilled');
-      const failed = results.filter(r => r?.status === 'rejected');
-      const stored = succeeded.map(r => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value);
-      const errors = failed.map((r) => {
-        const idx = results.indexOf(r);
-        return `index ${idx}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
-      });
-      const bulkStoreCancelled = signal.aborted && (succeeded.length + failed.length) < memories.length;
-      let text = bulkStoreCancelled
-        ? `⚠️ Bulk store cancelled: ${succeeded.length} of ${memories.length} stored, ${failed.length} failed`
-        : `✅ Bulk store: ${succeeded.length} stored, ${failed.length} failed`;
-      if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
-      if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
-      const resourceLinks = stored.filter((m: any) => m?.id).map((m: any) => memoryResourceLink(m.id, 'Stored memory'));
-      return {
-        content: [userAndAssistantText(text), ...resourceLinks],
-        structuredContent: { succeeded: succeeded.length, failed: failed.length, memories: stored, errors, cancelled: bulkStoreCancelled },
-      };
     }
 
     case 'memoclaw_import': {
@@ -283,77 +307,11 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         validateContentLength(m.content, `Memory at index ${i}`);
         validateImportance(m.importance, `Memory at index ${i} importance`);
       }
-
-      const IMPORT_FIELDS = ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'immutable'];
-
-      // Try batch API endpoint first
-      try {
-        const batchBody: any = {
-          memories: memories.map((m: any) => {
-            const item: any = {};
-            for (const key of IMPORT_FIELDS) {
-              if (m[key] !== undefined) item[key] = m[key];
-            }
-            if (session_id) item.session_id = session_id;
-            if (agent_id) item.agent_id = agent_id;
-            return item;
-          }),
-        };
-        const result = await makeRequest('POST', '/v1/store/batch', batchBody);
-        const stored = result.memories || result.data || [];
-        const failedItems = result.failed || [];
-        let text = `📥 Import: ${stored.length} stored, ${failedItems.length} failed`;
-        const importErrors: string[] = [];
-        if (failedItems.length > 0) {
-          for (const f of failedItems) importErrors.push(`index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
-          text += `\n\nErrors:\n${importErrors.join('\n')}`;
-        }
-        const resourceLinks = stored.filter((m: any) => m.id).map((m: any) => memoryResourceLink(m.id, 'Imported memory'));
-        return {
-          content: [userAndAssistantText(text), ...resourceLinks],
-          structuredContent: { succeeded: stored.length, failed: failedItems.length, errors: importErrors },
-        };
-      } catch (batchErr: any) {
-        if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
-          throw batchErr;
-        }
-      }
-
-      // Fallback: store one-by-one with concurrency
-      let importProgress = 0;
-      const results = await withConcurrency(
-        memories.map((m: any) => async () => {
-          const body: any = { content: m.content };
-          if (m.importance !== undefined) body.importance = m.importance;
-          if (m.tags) body.tags = m.tags;
-          if (m.namespace) body.namespace = m.namespace;
-          if (m.memory_type) body.memory_type = m.memory_type;
-          if (m.pinned !== undefined) body.pinned = m.pinned;
-          if (m.immutable !== undefined) body.immutable = m.immutable;
-          if (session_id) body.session_id = session_id;
-          if (agent_id) body.agent_id = agent_id;
-          const result = await makeRequest('POST', '/v1/store', body);
-          importProgress++;
-          await progress(importProgress, memories.length);
-          return result;
-        }),
-        10,
-        signal
+      return bulkStoreWithFallback(
+        ctx, memories,
+        ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'immutable'],
+        '📥 Import', session_id, agent_id, 'Imported memory',
       );
-      const succeeded = results.filter(r => r?.status === 'fulfilled').length;
-      const failed = results.filter(r => r?.status === 'rejected').length;
-      const errors = results
-        .map((r, i) => r?.status === 'rejected' ? `index ${i}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
-        .filter(Boolean);
-      const importCancelled = signal.aborted && (succeeded + failed) < memories.length;
-      let text = importCancelled
-        ? `⚠️ Import cancelled: ${succeeded} of ${memories.length} stored, ${failed} failed`
-        : `📥 Import: ${succeeded} stored, ${failed} failed`;
-      if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
-      return {
-        content: [userAndAssistantText(text)],
-        structuredContent: { succeeded, failed, errors, cancelled: importCancelled },
-      };
     }
 
     case 'memoclaw_pin': {
@@ -457,6 +415,8 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_count': {
       const { namespace, tags, agent_id, memory_type, session_id, before, after } = args as CountArgs;
+      validateISODate(after, 'after');
+      validateISODate(before, 'before');
       const params = new URLSearchParams();
       if (namespace) params.set('namespace', namespace);
       if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));

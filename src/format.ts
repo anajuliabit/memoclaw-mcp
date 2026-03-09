@@ -17,6 +17,15 @@ export function formatMemory(m: any): string {
   if (m.pinned) parts.push(`  📌 pinned`);
   if (m.immutable) parts.push(`  🔒 immutable`);
   if (m.expires_at) parts.push(`  expires: ${m.expires_at}`);
+  if (m.metadata && typeof m.metadata === 'object' && Object.keys(m.metadata).length > 0) {
+    // Exclude 'tags' from metadata display since tags are shown separately
+    const { tags: _tags, ...rest } = m.metadata;
+    if (Object.keys(rest).length > 0) parts.push(`  metadata: ${JSON.stringify(rest)}`);
+  }
+  if (m.access_count !== undefined && m.access_count !== null && m.access_count > 0) {
+    parts.push(`  accesses: ${m.access_count}`);
+  }
+  if (m.last_accessed) parts.push(`  last accessed: ${m.last_accessed}`);
   if (m.created_at) parts.push(`  created: ${m.created_at}`);
   if (m.updated_at && m.updated_at !== m.created_at) parts.push(`  updated: ${m.updated_at}`);
   return parts.join('\n');
