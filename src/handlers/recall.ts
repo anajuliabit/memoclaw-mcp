@@ -8,7 +8,19 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
 
   switch (name) {
     case 'memoclaw_recall': {
-      const { query, limit, min_similarity, tags, namespace, memory_type, session_id, agent_id, include_relations, after, before } = args as RecallArgs;
+      const {
+        query,
+        limit,
+        min_similarity,
+        tags,
+        namespace,
+        memory_type,
+        session_id,
+        agent_id,
+        include_relations,
+        after,
+        before,
+      } = args as RecallArgs;
       validateQuery(query);
       validateTags(tags);
       validateIdentifier(namespace, 'namespace');
@@ -23,13 +35,21 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (after) filters.after = after;
       if (before) filters.before = before;
       const result = await makeRequest('POST', '/v1/recall', {
-        query, limit, min_similarity,
+        query,
+        limit,
+        min_similarity,
         filters: Object.keys(filters).length > 0 ? filters : undefined,
-        namespace, session_id, agent_id, include_relations,
+        namespace,
+        session_id,
+        agent_id,
+        include_relations,
       });
       const memories = result.memories || [];
       if (memories.length === 0) {
-        return { content: [userText(`No memories found for query: "${query}"`, 0.3)], structuredContent: { memories: [] } };
+        return {
+          content: [userText(`No memories found for query: "${query}"`, 0.3)],
+          structuredContent: { memories: [] },
+        };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
       return {
@@ -64,7 +84,10 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/memories/search?${params}`);
       const memories = result.memories || result.data || [];
       if (memories.length === 0) {
-        return { content: [userText(`No memories found containing: "${query}"`, 0.3)], structuredContent: { memories: [] } };
+        return {
+          content: [userText(`No memories found containing: "${query}"`, 0.3)],
+          structuredContent: { memories: [] },
+        };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
       return {
@@ -90,7 +113,10 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('POST', '/v1/context', body);
       const memories = result.memories || result.context || [];
       if (memories.length === 0) {
-        return { content: [userText(`No relevant context found for: "${query}"`, 0.3)], structuredContent: { memories: [] } };
+        return {
+          content: [userText(`No relevant context found for: "${query}"`, 0.3)],
+          structuredContent: { memories: [] },
+        };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
       return {
@@ -118,12 +144,17 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/suggested${qs ? '?' + qs : ''}`);
       const suggestions = result.suggestions || result.memories || [];
       if (suggestions.length === 0) {
-        return { content: [userText(`No suggestions found${category ? ` for category "${category}"` : ''}.`, 0.3)], structuredContent: { suggestions: [] } };
+        return {
+          content: [userText(`No suggestions found${category ? ` for category "${category}"` : ''}.`, 0.3)],
+          structuredContent: { suggestions: [] },
+        };
       }
       const formatted = suggestions.map((m: any) => formatMemory(m)).join('\n\n');
       return {
         content: [
-          userAndAssistantText(`💡 ${suggestions.length} suggestions${category ? ` (${category})` : ''}:\n\n${formatted}`),
+          userAndAssistantText(
+            `💡 ${suggestions.length} suggestions${category ? ` (${category})` : ''}:\n\n${formatted}`,
+          ),
           assistantText(JSON.stringify(result, null, 2)),
         ],
         structuredContent: { suggestions },

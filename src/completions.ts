@@ -28,9 +28,9 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
     if (nsCache && Date.now() < nsCache.expiry) return nsCache.data;
     try {
       const result = await makeRequest('GET', '/v1/namespaces');
-      const namespaces = (result.namespaces || []).map((ns: any) =>
-        typeof ns === 'string' ? ns : ns.namespace || ns.name
-      ).filter(Boolean);
+      const namespaces = (result.namespaces || [])
+        .map((ns: any) => (typeof ns === 'string' ? ns : ns.namespace || ns.name))
+        .filter(Boolean);
       nsCache = { data: namespaces, expiry: Date.now() + CACHE_TTL };
       return namespaces;
     } catch {
@@ -42,9 +42,7 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
     if (tagCache && Date.now() < tagCache.expiry) return tagCache.data;
     try {
       const result = await makeRequest('GET', '/v1/tags');
-      const tags = (result.tags || []).map((t: any) =>
-        typeof t === 'string' ? t : t.tag || t.name
-      ).filter(Boolean);
+      const tags = (result.tags || []).map((t: any) => (typeof t === 'string' ? t : t.tag || t.name)).filter(Boolean);
       tagCache = { data: tags, expiry: Date.now() + CACHE_TTL };
       return tags;
     } catch {
@@ -55,9 +53,7 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
   /** Filter and return matching completions for a partial value */
   function filterValues(values: string[], partial: string): { values: string[]; total: number; hasMore: boolean } {
     const lower = partial.toLowerCase();
-    const matched = lower
-      ? values.filter((v) => v.toLowerCase().includes(lower))
-      : values;
+    const matched = lower ? values.filter((v) => v.toLowerCase().includes(lower)) : values;
     return {
       values: matched.slice(0, 100),
       total: matched.length,
@@ -67,7 +63,7 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
 
   return async function handleComplete(
     ref: { type: string; name?: string; uri?: string },
-    argument: { name: string; value: string }
+    argument: { name: string; value: string },
   ): Promise<{ completion: { values: string[]; total?: number; hasMore?: boolean } }> {
     const argName = argument.name;
     const partial = argument.value;

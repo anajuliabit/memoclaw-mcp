@@ -57,7 +57,9 @@ class MockStreamableHTTPServerTransport {
 }
 
 /** Build the HTTP handler extracted from index.ts logic */
-function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigins?: string; maxBodySize?: number } = {}) {
+function buildHttpHandler(
+  opts: { token?: string; version?: string; allowedOrigins?: string; maxBodySize?: number } = {},
+) {
   const { token, version = '1.14.0', allowedOrigins: originsEnv, maxBodySize = 1048576 } = opts;
   const sessions = new Map<string, MockStreamableHTTPServerTransport>();
   const sessionActivity = new Map<string, number>();
@@ -70,7 +72,12 @@ function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigi
   function getAllowedOrigins(): Set<string> | 'any' {
     if (originsEnv === '*') return 'any';
     if (originsEnv) {
-      return new Set(originsEnv.split(',').map((o) => o.trim().toLowerCase()).filter(Boolean));
+      return new Set(
+        originsEnv
+          .split(',')
+          .map((o) => o.trim().toLowerCase())
+          .filter(Boolean),
+      );
     }
     // Default: allow localhost only (port is dynamic in tests, so accept any localhost)
     return new Set(['http://localhost', 'http://127.0.0.1']);
@@ -105,9 +112,11 @@ function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigi
       const len = parseInt(contentLength, 10);
       if (!isNaN(len) && len > maxBodySize) {
         res.writeHead(413, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: `Request body too large. Maximum allowed size is ${maxBodySize} bytes.`,
-        }));
+        res.end(
+          JSON.stringify({
+            error: `Request body too large. Maximum allowed size is ${maxBodySize} bytes.`,
+          }),
+        );
         return true;
       }
     }
@@ -126,9 +135,11 @@ function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigi
           req.destroy();
           if (!res.headersSent) {
             res.writeHead(413, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              error: `Request body too large. Maximum allowed size is ${maxBodySize} bytes.`,
-            }));
+            res.end(
+              JSON.stringify({
+                error: `Request body too large. Maximum allowed size is ${maxBodySize} bytes.`,
+              }),
+            );
           }
           return false;
         }
@@ -155,7 +166,9 @@ function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigi
         const origin = req.headers['origin'] as string | undefined;
         if (!isOriginAllowed(origin)) {
           res.writeHead(403, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Origin "${origin}" is not allowed. Set MEMOCLAW_ALLOWED_ORIGINS to configure.` }));
+          res.end(
+            JSON.stringify({ error: `Origin "${origin}" is not allowed. Set MEMOCLAW_ALLOWED_ORIGINS to configure.` }),
+          );
           return;
         }
 
@@ -244,7 +257,9 @@ function buildHttpHandler(opts: { token?: string; version?: string; allowedOrigi
   };
 }
 
-function startServer(handler: (req: IncomingMessage, res: ServerResponse) => void): Promise<{ server: HttpServer; port: number }> {
+function startServer(
+  handler: (req: IncomingMessage, res: ServerResponse) => void,
+): Promise<{ server: HttpServer; port: number }> {
   return new Promise((resolve) => {
     const server = createServer(handler);
     server.listen(0, () => {
@@ -365,7 +380,7 @@ describe('HTTP Transport', () => {
       const firstTs = ctx.sessionActivity.get(sessionId)!;
 
       // Small delay
-      await new Promise(r => setTimeout(r, 10));
+      await new Promise((r) => setTimeout(r, 10));
 
       await fetch(`http://localhost:${port}/mcp`, {
         method: 'POST',
@@ -532,7 +547,7 @@ describe('HTTP Transport with Bearer Auth', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer wrong-token',
+        Authorization: 'Bearer wrong-token',
       },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
     });
@@ -544,7 +559,7 @@ describe('HTTP Transport with Bearer Auth', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TEST_TOKEN}`,
+        Authorization: `Bearer ${TEST_TOKEN}`,
       },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
     });
@@ -569,7 +584,7 @@ describe('HTTP Transport with Bearer Auth', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `bearer ${TEST_TOKEN}`,
+        Authorization: `bearer ${TEST_TOKEN}`,
       },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
     });
@@ -609,7 +624,7 @@ describe('CORS and Origin Validation', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'http://localhost',
+          Origin: 'http://localhost',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -624,7 +639,7 @@ describe('CORS and Origin Validation', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'https://evil.com',
+          Origin: 'https://evil.com',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -654,7 +669,7 @@ describe('CORS and Origin Validation', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'https://any-site.com',
+          Origin: 'https://any-site.com',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -685,7 +700,7 @@ describe('CORS and Origin Validation', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'https://app.example.com',
+          Origin: 'https://app.example.com',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -698,7 +713,7 @@ describe('CORS and Origin Validation', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'https://other.com',
+          Origin: 'https://other.com',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -725,7 +740,7 @@ describe('CORS and Origin Validation', () => {
       const res = await fetch(`http://localhost:${port}/mcp`, {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'https://webapp.example.com',
+          Origin: 'https://webapp.example.com',
           'Access-Control-Request-Method': 'POST',
           'Access-Control-Request-Headers': 'Content-Type, Authorization, Mcp-Session-Id',
         },
@@ -745,7 +760,7 @@ describe('CORS and Origin Validation', () => {
     it('returns 204 with no body for preflight', async () => {
       const res = await fetch(`http://localhost:${port}/mcp`, {
         method: 'OPTIONS',
-        headers: { 'Origin': 'https://webapp.example.com' },
+        headers: { Origin: 'https://webapp.example.com' },
       });
       expect(res.status).toBe(204);
       const body = await res.text();
@@ -762,7 +777,7 @@ describe('CORS and Origin Validation', () => {
 
       const res = await fetch(`http://localhost:${port}/mcp`, {
         method: 'OPTIONS',
-        headers: { 'Origin': 'https://evil.com' },
+        headers: { Origin: 'https://evil.com' },
       });
       expect(res.status).toBe(403);
     });
@@ -786,7 +801,7 @@ describe('CORS and Origin Validation', () => {
     it('includes CORS headers on GET /mcp error response', async () => {
       const res = await fetch(`http://localhost:${port}/mcp`, {
         method: 'GET',
-        headers: { 'Origin': 'https://webapp.example.com' },
+        headers: { Origin: 'https://webapp.example.com' },
       });
       // GET without session returns 400, but should still have CORS headers
       expect(res.status).toBe(400);
@@ -798,7 +813,7 @@ describe('CORS and Origin Validation', () => {
         method: 'DELETE',
         headers: {
           'Mcp-Session-Id': 'nonexistent',
-          'Origin': 'https://webapp.example.com',
+          Origin: 'https://webapp.example.com',
         },
       });
       expect(res.status).toBe(404);
@@ -828,7 +843,7 @@ describe('HTTP Transport CORS', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'http://example.com',
+          Origin: 'http://example.com',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -843,7 +858,7 @@ describe('HTTP Transport CORS', () => {
       const res = await fetch(`http://localhost:${port}/mcp`, {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'http://example.com',
+          Origin: 'http://example.com',
           'Access-Control-Request-Method': 'POST',
           'Access-Control-Request-Headers': 'Content-Type, Mcp-Session-Id',
         },
@@ -861,7 +876,7 @@ describe('HTTP Transport CORS', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'http://evil.com',
+          Origin: 'http://evil.com',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -874,7 +889,7 @@ describe('HTTP Transport CORS', () => {
       const res = await fetch(`http://localhost:${port}/mcp`, {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'http://evil.com',
+          Origin: 'http://evil.com',
           'Access-Control-Request-Method': 'POST',
         },
       });
@@ -902,7 +917,7 @@ describe('HTTP Transport CORS', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Origin': 'http://example.com',
+            Origin: 'http://example.com',
           },
           body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
         });
@@ -936,7 +951,7 @@ describe('HTTP Transport CORS', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'http://anything.com',
+          Origin: 'http://anything.com',
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
       });
@@ -951,7 +966,7 @@ describe('HTTP Transport CORS', () => {
       const res = await fetch(`http://localhost:${port}/mcp`, {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'http://anything.com',
+          Origin: 'http://anything.com',
           'Access-Control-Request-Method': 'POST',
         },
       });
@@ -994,17 +1009,23 @@ describe('HTTP Transport CORS', () => {
         // Use raw HTTP to send a mismatched Content-Length header (fetch won't allow this)
         const { request } = await import('node:http');
         const result = await new Promise<{ status: number; body: string }>((resolve, reject) => {
-          const req = request(`http://localhost:${port}/mcp`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': '2097152', // 2MB claimed
+          const req = request(
+            `http://localhost:${port}/mcp`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': '2097152', // 2MB claimed
+              },
             },
-          }, (res) => {
-            let data = '';
-            res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
-            res.on('end', () => resolve({ status: res.statusCode!, body: data }));
-          });
+            (res) => {
+              let data = '';
+              res.on('data', (chunk: Buffer) => {
+                data += chunk.toString();
+              });
+              res.on('end', () => resolve({ status: res.statusCode!, body: data }));
+            },
+          );
           req.on('error', reject);
           // Send a small body but with a large Content-Length header
           req.write('{}');
@@ -1056,7 +1077,7 @@ describe('HTTP Transport CORS', () => {
         });
 
         expect(res.status).toBe(413);
-        const json = await res.json() as any;
+        const json = (await res.json()) as any;
         expect(json.error).toContain('100 bytes');
       });
 

@@ -1,10 +1,29 @@
-import { formatMemory, withConcurrency, validateContentLength, validateImportance, UPDATE_FIELDS, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
+import {
+  formatMemory,
+  withConcurrency,
+  validateContentLength,
+  validateImportance,
+  UPDATE_FIELDS,
+  userAndAssistantText,
+  assistantText,
+  userText,
+  memoryResourceLink,
+} from '../format.js';
 import { validateIdentifier, validateId, validateTags, validateISODate } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
-  StoreArgs, GetArgs, ListArgs, UpdateArgs, DeleteArgs,
-  BulkDeleteArgs, BulkStoreArgs, ImportArgs, PinArgs, UnpinArgs,
-  BatchUpdateArgs, CountArgs,
+  StoreArgs,
+  GetArgs,
+  ListArgs,
+  UpdateArgs,
+  DeleteArgs,
+  BulkDeleteArgs,
+  BulkStoreArgs,
+  ImportArgs,
+  PinArgs,
+  UnpinArgs,
+  BatchUpdateArgs,
+  CountArgs,
 } from '../types.js';
 
 /**
@@ -73,16 +92,18 @@ async function bulkStoreWithFallback(
       return result;
     }),
     10,
-    signal
+    signal,
   );
-  const succeeded = results.filter(r => r?.status === 'fulfilled');
-  const failed = results.filter(r => r?.status === 'rejected');
-  const stored = succeeded.map(r => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value);
+  const succeeded = results.filter((r) => r?.status === 'fulfilled');
+  const failed = results.filter((r) => r?.status === 'rejected');
+  const stored = succeeded.map(
+    (r) => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value,
+  );
   const errors = failed.map((r) => {
     const idx = results.indexOf(r);
     return `index ${idx}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
   });
-  const cancelled = signal.aborted && (succeeded.length + failed.length) < memories.length;
+  const cancelled = signal.aborted && succeeded.length + failed.length < memories.length;
   let text = cancelled
     ? `⚠️ ${prefix} cancelled: ${succeeded.length} of ${memories.length} stored, ${failed.length} failed`
     : `${prefix}: ${succeeded.length} stored, ${failed.length} failed`;
@@ -100,7 +121,8 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
   switch (name) {
     case 'memoclaw_store': {
-      const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable } = args as StoreArgs;
+      const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable } =
+        args as StoreArgs;
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
@@ -140,10 +162,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/memories/${id}`);
       const memory = result.memory || result;
       return {
-        content: [
-          userAndAssistantText(formatMemory(memory)),
-          assistantText(JSON.stringify(result, null, 2)),
-        ],
+        content: [userAndAssistantText(formatMemory(memory)), assistantText(JSON.stringify(result, null, 2))],
         structuredContent: { memory },
       };
     }
@@ -170,9 +189,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/memories?${params}`);
       const memories = result.memories || result.data || [];
       const total = result.total ?? memories.length;
-      const formatted = memories.length > 0
-        ? '\n\n' + memories.map((m: any) => formatMemory(m)).join('\n\n')
-        : '';
+      const formatted = memories.length > 0 ? '\n\n' + memories.map((m: any) => formatMemory(m)).join('\n\n') : '';
       return {
         content: [
           userAndAssistantText(`Showing ${memories.length} of ${total} memories${formatted}`),
@@ -217,10 +234,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       validateId(id, 'id');
       const result = await makeRequest('DELETE', `/v1/memories/${id}`);
       return {
-        content: [
-          userAndAssistantText(`🗑️ Memory ${id} deleted`),
-          assistantText(JSON.stringify(result, null, 2)),
-        ],
+        content: [userAndAssistantText(`🗑️ Memory ${id} deleted`), assistantText(JSON.stringify(result, null, 2))],
         structuredContent: { deleted: true, id },
       };
     }
@@ -254,16 +268,20 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
             return result;
           }),
           10,
-          signal
+          signal,
         );
-        succeeded = results.filter(r => r?.status === 'fulfilled').length;
-        failed = results.filter(r => r?.status === 'rejected').length;
+        succeeded = results.filter((r) => r?.status === 'fulfilled').length;
+        failed = results.filter((r) => r?.status === 'rejected').length;
         errors = results
-          .map((r, i) => r?.status === 'rejected' ? `${ids[i]}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}` : null)
+          .map((r, i) =>
+            r?.status === 'rejected'
+              ? `${ids[i]}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`
+              : null,
+          )
           .filter(Boolean) as string[];
       }
 
-      const bulkDeleteCancelled = signal.aborted && (succeeded + failed) < ids.length;
+      const bulkDeleteCancelled = signal.aborted && succeeded + failed < ids.length;
       let text = bulkDeleteCancelled
         ? `⚠️ Bulk delete cancelled: ${succeeded} of ${ids.length} succeeded, ${failed} failed`
         : `🗑️ Bulk delete: ${succeeded} succeeded, ${failed} failed`;
@@ -288,9 +306,12 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         validateImportance(m.importance, `Memory at index ${i} importance`);
       }
       return bulkStoreWithFallback(
-        ctx, memories,
+        ctx,
+        memories,
         ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable'],
-        '✅ Bulk store', session_id, agent_id,
+        '✅ Bulk store',
+        session_id,
+        agent_id,
       );
     }
 
@@ -308,9 +329,13 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         validateImportance(m.importance, `Memory at index ${i} importance`);
       }
       return bulkStoreWithFallback(
-        ctx, memories,
+        ctx,
+        memories,
         ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'immutable'],
-        '📥 Import', session_id, agent_id, 'Imported memory',
+        '📥 Import',
+        session_id,
+        agent_id,
+        'Imported memory',
       );
     }
 
@@ -363,12 +388,13 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           .filter((m: any) => m.id)
           .map((m: any) => memoryResourceLink(m.id, 'Updated memory'));
         return {
-          content: [
-            userAndAssistantText(text),
-            assistantText(JSON.stringify(result, null, 2)),
-            ...batchResourceLinks,
-          ],
-          structuredContent: { updated: typeof updated === 'number' ? updated : memories.length, failed: 0, memories, errors: [] },
+          content: [userAndAssistantText(text), assistantText(JSON.stringify(result, null, 2)), ...batchResourceLinks],
+          structuredContent: {
+            updated: typeof updated === 'number' ? updated : memories.length,
+            failed: 0,
+            memories,
+            errors: [],
+          },
         };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
@@ -386,16 +412,18 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
               return result;
             }),
             10,
-            signal
+            signal,
           );
-          const succeeded = results.filter(r => r?.status === 'fulfilled');
-          const failed = results.filter(r => r?.status === 'rejected');
-          const memories = succeeded.map(r => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value);
+          const succeeded = results.filter((r) => r?.status === 'fulfilled');
+          const failed = results.filter((r) => r?.status === 'rejected');
+          const memories = succeeded.map(
+            (r) => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value,
+          );
           const errors = failed.map((r) => {
             const idx = results.indexOf(r);
             return `${updates[idx]?.id}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
           });
-          const batchCancelled = signal.aborted && (succeeded.length + failed.length) < updates.length;
+          const batchCancelled = signal.aborted && succeeded.length + failed.length < updates.length;
           let text = batchCancelled
             ? `⚠️ Batch update cancelled: ${succeeded.length} of ${updates.length} updated, ${failed.length} failed`
             : `✅ Batch update: ${succeeded.length} updated, ${failed.length} failed`;
@@ -406,7 +434,13 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
             .map((u: any) => memoryResourceLink(u.id, 'Updated memory'));
           return {
             content: [userAndAssistantText(text), ...fallbackResourceLinks],
-            structuredContent: { updated: succeeded.length, failed: failed.length, memories, errors, cancelled: batchCancelled },
+            structuredContent: {
+              updated: succeeded.length,
+              failed: failed.length,
+              memories,
+              errors,
+              cancelled: batchCancelled,
+            },
           };
         }
         throw err;
@@ -452,8 +486,14 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
               const page = await makeRequest('GET', `/v1/memories?${pageParams}`);
               const items = page.memories || page.data || [];
               counted += items.length;
-              if (typeof page.total === 'number') { total = page.total; break; }
-              if (items.length < pageSize) { total = counted; break; }
+              if (typeof page.total === 'number') {
+                total = page.total;
+                break;
+              }
+              if (items.length < pageSize) {
+                total = counted;
+                break;
+              }
               offset += pageSize;
             }
             if (total === 'unknown') total = `${counted}+`;
@@ -461,7 +501,15 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         }
       }
 
-      const filters = [namespace && `namespace=${namespace}`, memory_type && `type=${memory_type}`, agent_id && `agent=${agent_id}`, session_id && `session=${session_id}`, tags?.length && `tags=${tags.join(',')}`, after && `after=${after}`, before && `before=${before}`].filter(Boolean);
+      const filters = [
+        namespace && `namespace=${namespace}`,
+        memory_type && `type=${memory_type}`,
+        agent_id && `agent=${agent_id}`,
+        session_id && `session=${session_id}`,
+        tags?.length && `tags=${tags.join(',')}`,
+        after && `after=${after}`,
+        before && `before=${before}`,
+      ].filter(Boolean);
       const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
       return {
         content: [userText(`📊 Total memories${filterStr}: ${total}`, 0.5)],

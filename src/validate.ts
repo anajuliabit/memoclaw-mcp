@@ -30,9 +30,7 @@ export function validateIdentifier(value: unknown, label: string): string | unde
     throw new Error(`${label} exceeds ${MAX_IDENTIFIER_LENGTH} character limit (got ${value.length})`);
   }
   if (!IDENTIFIER_PATTERN.test(value)) {
-    throw new Error(
-      `${label} contains invalid characters. Allowed: letters, numbers, dash, underscore, dot, colon, @`
-    );
+    throw new Error(`${label} contains invalid characters. Allowed: letters, numbers, dash, underscore, dot, colon, @`);
   }
   return value;
 }
@@ -97,9 +95,7 @@ export function validateISODate(value: unknown, label: string): string | undefin
   }
   const date = new Date(value);
   if (isNaN(date.getTime())) {
-    throw new Error(
-      `${label} is not a valid date. Use ISO 8601 format, e.g. "2025-12-31T23:59:59Z".`
-    );
+    throw new Error(`${label} is not a valid date. Use ISO 8601 format, e.g. "2025-12-31T23:59:59Z".`);
   }
   return value;
 }

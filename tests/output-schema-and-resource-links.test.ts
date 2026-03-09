@@ -14,7 +14,14 @@ import type { HandlerContext } from '../src/handlers/types.js';
 function createMockContext(mockResponse: any = {}): HandlerContext {
   return {
     api: {} as any,
-    config: { apiUrl: 'https://api.memoclaw.com', privateKey: '0x1234', configSource: 'env', timeout: 30000, maxRetries: 3, allowedOrigins: 'any' } as any,
+    config: {
+      apiUrl: 'https://api.memoclaw.com',
+      privateKey: '0x1234',
+      configSource: 'env',
+      timeout: 30000,
+      maxRetries: 3,
+      allowedOrigins: 'any',
+    } as any,
     makeRequest: async () => mockResponse,
     account: { address: '0xTestWallet' } as any,
   };
@@ -23,7 +30,7 @@ function createMockContext(mockResponse: any = {}): HandlerContext {
 // ── outputSchema on tool definitions (#91) ───────────────────────────────────
 
 describe('outputSchema on tool definitions (#91)', () => {
-  const toolMap = new Map(TOOLS.map(t => [t.name, t]));
+  const toolMap = new Map(TOOLS.map((t) => [t.name, t]));
 
   it('memoclaw_store has outputSchema with memory object', () => {
     const tool = toolMap.get('memoclaw_store')!;
@@ -116,7 +123,7 @@ describe('resource_link in mutation tool results (#92)', () => {
   it('memoclaw_store returns resource_link to stored memory', async () => {
     const ctx = createMockContext({ memory: { id: 'abc-123', content: 'test' } });
     const result = await handleMemory(ctx, 'memoclaw_store', { content: 'test' });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(1);
     expect((links[0] as any).uri).toBe('memoclaw://memories/abc-123');
     expect((links[0] as any).mimeType).toBe('application/json');
@@ -125,7 +132,7 @@ describe('resource_link in mutation tool results (#92)', () => {
   it('memoclaw_update returns resource_link to updated memory', async () => {
     const ctx = createMockContext({ memory: { id: 'xyz', content: 'updated' } });
     const result = await handleMemory(ctx, 'memoclaw_update', { id: 'xyz', content: 'updated' });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(1);
     expect((links[0] as any).uri).toBe('memoclaw://memories/xyz');
     expect((links[0] as any).name).toBe('Updated memory');
@@ -134,7 +141,7 @@ describe('resource_link in mutation tool results (#92)', () => {
   it('memoclaw_pin returns resource_link', async () => {
     const ctx = createMockContext({ memory: { id: 'pin-1', content: 'pinned', pinned: true } });
     const result = await handleMemory(ctx, 'memoclaw_pin', { id: 'pin-1' });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(1);
     expect((links[0] as any).uri).toBe('memoclaw://memories/pin-1');
   });
@@ -142,20 +149,23 @@ describe('resource_link in mutation tool results (#92)', () => {
   it('memoclaw_unpin returns resource_link', async () => {
     const ctx = createMockContext({ memory: { id: 'unpin-1', content: 'unpinned', pinned: false } });
     const result = await handleMemory(ctx, 'memoclaw_unpin', { id: 'unpin-1' });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(1);
     expect((links[0] as any).uri).toBe('memoclaw://memories/unpin-1');
   });
 
   it('memoclaw_bulk_store returns resource_links for stored memories', async () => {
     const ctx = createMockContext({
-      memories: [{ id: 'b1', content: 'a' }, { id: 'b2', content: 'b' }],
+      memories: [
+        { id: 'b1', content: 'a' },
+        { id: 'b2', content: 'b' },
+      ],
       failed: [],
     });
     const result = await handleMemory(ctx, 'memoclaw_bulk_store', {
       memories: [{ content: 'a' }, { content: 'b' }],
     });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(2);
     expect((links[0] as any).uri).toBe('memoclaw://memories/b1');
     expect((links[1] as any).uri).toBe('memoclaw://memories/b2');
@@ -169,7 +179,7 @@ describe('resource_link in mutation tool results (#92)', () => {
     const result = await handleMemory(ctx, 'memoclaw_import', {
       memories: [{ content: 'imported' }],
     });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(1);
     expect((links[0] as any).uri).toBe('memoclaw://memories/i1');
     expect((links[0] as any).name).toBe('Imported memory');
@@ -178,14 +188,14 @@ describe('resource_link in mutation tool results (#92)', () => {
   it('memoclaw_store skips resource_link when no id returned', async () => {
     const ctx = createMockContext({ memory: { content: 'no id' } });
     const result = await handleMemory(ctx, 'memoclaw_store', { content: 'no id' });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(0);
   });
 
   it('read-only tools do NOT return resource_links', async () => {
     const ctx = createMockContext({ memories: [{ id: '1', content: 'test', similarity: 0.9 }] });
     const result = await handleRecall(ctx, 'memoclaw_recall', { query: 'test' });
-    const links = result!.content.filter(c => c.type === 'resource_link');
+    const links = result!.content.filter((c) => c.type === 'resource_link');
     expect(links).toHaveLength(0);
   });
 });

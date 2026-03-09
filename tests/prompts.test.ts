@@ -3,8 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-process.env.MEMOCLAW_PRIVATE_KEY =
-  '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
+process.env.MEMOCLAW_PRIVATE_KEY = '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
 process.env.MEMOCLAW_URL = 'https://test.memoclaw.com';
 process.env.MEMOCLAW_TIMEOUT = '5000';
 process.env.MEMOCLAW_MAX_RETRIES = '0';
@@ -60,9 +59,7 @@ describe('Prompts', () => {
   describe('review-memories', () => {
     it('fetches memories and returns review prompt', async () => {
       mockApiResponse({
-        memories: [
-          { id: '1', content: 'Test memory', importance: 0.5, tags: [], created_at: '2025-01-01T00:00:00Z' },
-        ],
+        memories: [{ id: '1', content: 'Test memory', importance: 0.5, tags: [], created_at: '2025-01-01T00:00:00Z' }],
       });
 
       const result = await handleGetPrompt('review-memories', {});

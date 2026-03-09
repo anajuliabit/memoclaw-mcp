@@ -32,11 +32,14 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
       const relations = result.relations || [];
       if (relations.length === 0) {
-        return { content: [userText(`No relations found for memory ${memory_id}.`, 0.3)], structuredContent: { relations: [] } };
+        return {
+          content: [userText(`No relations found for memory ${memory_id}.`, 0.3)],
+          structuredContent: { relations: [] },
+        };
       }
-      const formatted = relations.map((r: any) =>
-        `🔗 ${r.id || '?'}: ${r.source_id || memory_id} —[${r.relation_type}]→ ${r.target_id}`
-      ).join('\n');
+      const formatted = relations
+        .map((r: any) => `🔗 ${r.id || '?'}: ${r.source_id || memory_id} —[${r.relation_type}]→ ${r.target_id}`)
+        .join('\n');
       return {
         content: [
           userAndAssistantText(`Relations for ${memory_id}:\n${formatted}`),
@@ -72,18 +75,19 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
 
       for (let d = 0; d <= depth && frontier.length > 0; d++) {
         const nextFrontier: string[] = [];
-        const unvisited = frontier.filter(mid => !visited.has(mid));
+        const unvisited = frontier.filter((mid) => !visited.has(mid));
         if (unvisited.length === 0) break;
         for (const mid of unvisited) visited.add(mid);
 
         // Fetch all memories at this depth level in parallel
         const memResults = await withConcurrency(
-          unvisited.map(mid => () =>
-            makeRequest('GET', `/v1/memories/${mid}`)
-              .then(mem => ({ id: mid, data: mem.memory || mem }))
-              .catch(() => ({ id: mid, data: { id: mid, content: '(could not fetch)' } }))
+          unvisited.map(
+            (mid) => () =>
+              makeRequest('GET', `/v1/memories/${mid}`)
+                .then((mem) => ({ id: mid, data: mem.memory || mem }))
+                .catch(() => ({ id: mid, data: { id: mid, content: '(could not fetch)' } })),
           ),
-          10
+          10,
         );
         for (const r of memResults) {
           if (r.status === 'fulfilled') nodes.push(r.value.data);
@@ -92,12 +96,13 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
         // Fetch all relations at this depth level in parallel
         if (d < depth) {
           const relResults = await withConcurrency(
-            unvisited.map(mid => () =>
-              makeRequest('GET', `/v1/memories/${mid}/relations`)
-                .then(relResult => ({ id: mid, relations: relResult.relations || [] }))
-                .catch(() => ({ id: mid, relations: [] as any[] }))
+            unvisited.map(
+              (mid) => () =>
+                makeRequest('GET', `/v1/memories/${mid}/relations`)
+                  .then((relResult) => ({ id: mid, relations: relResult.relations || [] }))
+                  .catch(() => ({ id: mid, relations: [] as any[] })),
             ),
-            10
+            10,
           );
           for (const r of relResults) {
             if (r.status === 'fulfilled') {
@@ -116,7 +121,11 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       const nodesFmt = nodes.map((n: any) => formatMemory(n)).join('\n\n');
       const edgesFmt = edges.map((r: any) => `  ${r.source_id} —[${r.relation_type}]→ ${r.target_id}`).join('\n');
       return {
-        content: [userAndAssistantText(`🕸️ Graph from ${memory_id} (depth ${depth}):\n\n${nodes.length} nodes:\n${nodesFmt}\n\n${edges.length} edges:\n${edgesFmt || '  (none)'}`)],
+        content: [
+          userAndAssistantText(
+            `🕸️ Graph from ${memory_id} (depth ${depth}):\n\n${nodes.length} nodes:\n${nodesFmt}\n\n${edges.length} edges:\n${edgesFmt || '  (none)'}`,
+          ),
+        ],
         structuredContent: { nodes, edges },
       };
     }

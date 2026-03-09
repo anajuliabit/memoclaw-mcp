@@ -97,7 +97,7 @@ const server = new Server(
   {
     capabilities: { tools: {}, resources: {}, prompts: {}, completions: {}, logging: {} },
     instructions: SERVER_INSTRUCTIONS,
-  }
+  },
 );
 
 // Attach logger to server for sending notifications to clients
@@ -232,19 +232,26 @@ async function main() {
     const SESSION_TTL_MS = parseInt(process.env.MEMOCLAW_SESSION_TTL_MS || '', 10) || 30 * 60 * 1000;
 
     /** Sweep interval to clean up idle sessions (every 5 min) */
-    const sweepInterval = setInterval(() => {
-      const now = Date.now();
-      for (const [id, lastActive] of sessionActivity) {
-        if (now - lastActive > SESSION_TTL_MS) {
-          const transport = sessions.get(id);
-          if (transport) {
-            try { transport.close?.(); } catch { /* ignore */ }
+    const sweepInterval = setInterval(
+      () => {
+        const now = Date.now();
+        for (const [id, lastActive] of sessionActivity) {
+          if (now - lastActive > SESSION_TTL_MS) {
+            const transport = sessions.get(id);
+            if (transport) {
+              try {
+                transport.close?.();
+              } catch {
+                /* ignore */
+              }
+            }
+            sessions.delete(id);
+            sessionActivity.delete(id);
           }
-          sessions.delete(id);
-          sessionActivity.delete(id);
         }
-      }
-    }, 5 * 60 * 1000);
+      },
+      5 * 60 * 1000,
+    );
     sweepInterval.unref(); // Don't prevent process exit
 
     /** Touch session activity timestamp */
@@ -264,14 +271,15 @@ async function main() {
       const env = process.env.MEMOCLAW_ALLOWED_ORIGINS;
       if (env === '*') return 'any';
       if (env) {
-        return new Set(env.split(',').map((o) => o.trim().toLowerCase()).filter(Boolean));
+        return new Set(
+          env
+            .split(',')
+            .map((o) => o.trim().toLowerCase())
+            .filter(Boolean),
+        );
       }
       // Default: allow localhost origins only (prevents DNS rebinding)
-      return new Set([
-        `http://localhost:${port}`,
-        `http://127.0.0.1:${port}`,
-        `http://[::1]:${port}`,
-      ]);
+      return new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, `http://[::1]:${port}`]);
     }
 
     const allowedOrigins = getAllowedOrigins();
@@ -292,9 +300,11 @@ async function main() {
         const len = parseInt(contentLength, 10);
         if (!isNaN(len) && len > MAX_BODY_SIZE) {
           res.writeHead(413, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
-          }));
+          res.end(
+            JSON.stringify({
+              error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
+            }),
+          );
           return true;
         }
       }
@@ -315,9 +325,11 @@ async function main() {
           req.destroy();
           if (!res.headersSent) {
             res.writeHead(413, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
-            }));
+            res.end(
+              JSON.stringify({
+                error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
+              }),
+            );
           }
         }
       });
@@ -369,7 +381,9 @@ async function main() {
         const origin = req.headers['origin'] as string | undefined;
         if (!isOriginAllowed(origin)) {
           res.writeHead(403, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Origin "${origin}" is not allowed. Set MEMOCLAW_ALLOWED_ORIGINS to configure.` }));
+          res.end(
+            JSON.stringify({ error: `Origin "${origin}" is not allowed. Set MEMOCLAW_ALLOWED_ORIGINS to configure.` }),
+          );
           return;
         }
 

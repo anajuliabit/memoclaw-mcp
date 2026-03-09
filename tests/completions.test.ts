@@ -26,12 +26,15 @@ describe('Completions', () => {
 
   it('returns namespace completions', async () => {
     mockMakeRequest.mockResolvedValueOnce({
-      namespaces: [{ namespace: 'work', count: 5 }, { namespace: 'personal', count: 3 }],
+      namespaces: [
+        { namespace: 'work', count: 5 },
+        { namespace: 'personal', count: 3 },
+      ],
     });
 
     const result = await handleComplete(
       { type: 'ref/prompt', name: 'review-memories' },
-      { name: 'namespace', value: 'wo' }
+      { name: 'namespace', value: 'wo' },
     );
 
     expect(result.completion.values).toEqual(['work']);
@@ -40,12 +43,15 @@ describe('Completions', () => {
 
   it('returns all namespaces when value is empty', async () => {
     mockMakeRequest.mockResolvedValueOnce({
-      namespaces: [{ namespace: 'work', count: 5 }, { namespace: 'personal', count: 3 }],
+      namespaces: [
+        { namespace: 'work', count: 5 },
+        { namespace: 'personal', count: 3 },
+      ],
     });
 
     const result = await handleComplete(
       { type: 'ref/prompt', name: 'review-memories' },
-      { name: 'namespace', value: '' }
+      { name: 'namespace', value: '' },
     );
 
     expect(result.completion.values).toEqual(['work', 'personal']);
@@ -58,7 +64,7 @@ describe('Completions', () => {
 
     const result = await handleComplete(
       { type: 'ref/resource', uri: 'memoclaw://tags/{tag}' },
-      { name: 'tag', value: 'front' }
+      { name: 'tag', value: 'front' },
     );
 
     expect(result.completion.values).toEqual(['frontend']);
@@ -67,7 +73,7 @@ describe('Completions', () => {
   it('returns memory_type completions', async () => {
     const result = await handleComplete(
       { type: 'ref/prompt', name: 'load-context' },
-      { name: 'memory_type', value: 'cor' }
+      { name: 'memory_type', value: 'cor' },
     );
 
     expect(result.completion.values).toEqual(['correction']);
@@ -77,7 +83,7 @@ describe('Completions', () => {
   it('returns empty for unknown arguments', async () => {
     const result = await handleComplete(
       { type: 'ref/prompt', name: 'load-context' },
-      { name: 'unknown_arg', value: 'test' }
+      { name: 'unknown_arg', value: 'test' },
     );
 
     expect(result.completion.values).toEqual([]);
@@ -88,14 +94,8 @@ describe('Completions', () => {
       namespaces: [{ namespace: 'work', count: 5 }],
     });
 
-    await handleComplete(
-      { type: 'ref/prompt' },
-      { name: 'namespace', value: '' }
-    );
-    await handleComplete(
-      { type: 'ref/prompt' },
-      { name: 'namespace', value: 'w' }
-    );
+    await handleComplete({ type: 'ref/prompt' }, { name: 'namespace', value: '' });
+    await handleComplete({ type: 'ref/prompt' }, { name: 'namespace', value: 'w' });
 
     expect(mockMakeRequest).toHaveBeenCalledTimes(1);
   });
@@ -103,10 +103,7 @@ describe('Completions', () => {
   it('handles API errors gracefully', async () => {
     mockMakeRequest.mockRejectedValueOnce(new Error('Network error'));
 
-    const result = await handleComplete(
-      { type: 'ref/prompt' },
-      { name: 'namespace', value: '' }
-    );
+    const result = await handleComplete({ type: 'ref/prompt' }, { name: 'namespace', value: '' });
 
     expect(result.completion.values).toEqual([]);
   });

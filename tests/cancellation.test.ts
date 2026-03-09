@@ -75,7 +75,7 @@ describe('withConcurrency respects AbortSignal', () => {
     const tasks = Array.from({ length: 5 }, (_, i) => async () => i);
     const results = await withConcurrency(tasks, 2, ac.signal);
     expect(results.length).toBe(5);
-    expect(results.every(r => r.status === 'fulfilled')).toBe(true);
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
   });
 });
 

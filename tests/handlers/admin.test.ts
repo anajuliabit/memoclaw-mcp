@@ -33,9 +33,12 @@ describe('handleAdmin', () => {
     });
 
     it('reports unhealthy when API unreachable', async () => {
-      const api = mockApiWithErrors({}, {
-        'GET /v1/free-tier/status': new Error('Connection refused'),
-      });
+      const api = mockApiWithErrors(
+        {},
+        {
+          'GET /v1/free-tier/status': new Error('Connection refused'),
+        },
+      );
       const ctx = createContext(api as any, testConfig);
       const result = await handleAdmin(ctx, 'memoclaw_init', {});
       expect(result!.content[0].text).toContain('needs configuration');
@@ -63,8 +66,7 @@ describe('handleAdmin', () => {
 
     it('rejects missing messages and text', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_ingest', {}))
-        .rejects.toThrow('Either messages or text');
+      await expect(handleAdmin(ctx, 'memoclaw_ingest', {})).rejects.toThrow('Either messages or text');
     });
   });
 
@@ -82,8 +84,7 @@ describe('handleAdmin', () => {
 
     it('rejects empty messages', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_extract', { messages: [] }))
-        .rejects.toThrow('non-empty array');
+      await expect(handleAdmin(ctx, 'memoclaw_extract', { messages: [] })).rejects.toThrow('non-empty array');
     });
   });
 
@@ -110,7 +111,12 @@ describe('handleAdmin', () => {
   describe('memoclaw_export', () => {
     it('exports memories', async () => {
       const { ctx } = makeCtx({
-        'GET /v1/export': { memories: [{ id: '1', content: 'a' }, { id: '2', content: 'b' }] },
+        'GET /v1/export': {
+          memories: [
+            { id: '1', content: 'a' },
+            { id: '2', content: 'b' },
+          ],
+        },
       });
       const result = await handleAdmin(ctx, 'memoclaw_export', {});
       expect(result!.content[0].text).toContain('Exported 2 memories');
@@ -140,8 +146,7 @@ describe('handleAdmin', () => {
 
     it('rejects missing namespace', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_delete_namespace', {}))
-        .rejects.toThrow('namespace is required');
+      await expect(handleAdmin(ctx, 'memoclaw_delete_namespace', {})).rejects.toThrow('namespace is required');
     });
   });
 
@@ -149,7 +154,12 @@ describe('handleAdmin', () => {
   describe('memoclaw_tags', () => {
     it('returns tags from dedicated endpoint', async () => {
       const { ctx } = makeCtx({
-        'GET /v1/tags': { tags: [{ tag: 'work', count: 5 }, { tag: 'personal', count: 3 }] },
+        'GET /v1/tags': {
+          tags: [
+            { tag: 'work', count: 5 },
+            { tag: 'personal', count: 3 },
+          ],
+        },
       });
       const result = await handleAdmin(ctx, 'memoclaw_tags', {});
       expect(result!.content[0].text).toContain('2 tags');
@@ -177,8 +187,7 @@ describe('handleAdmin', () => {
 
     it('rejects missing id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_history', {}))
-        .rejects.toThrow('id is required');
+      await expect(handleAdmin(ctx, 'memoclaw_history', {})).rejects.toThrow('id is required');
     });
   });
 
@@ -186,7 +195,12 @@ describe('handleAdmin', () => {
   describe('memoclaw_namespaces', () => {
     it('returns namespaces from API', async () => {
       const { ctx } = makeCtx({
-        'GET /v1/namespaces': { namespaces: [{ namespace: 'work', count: 10 }, { namespace: 'personal', count: 5 }] },
+        'GET /v1/namespaces': {
+          namespaces: [
+            { namespace: 'work', count: 10 },
+            { namespace: 'personal', count: 5 },
+          ],
+        },
       });
       const result = await handleAdmin(ctx, 'memoclaw_namespaces', {});
       expect(result!.content[0].text).toContain('2 namespaces');
@@ -239,15 +253,11 @@ describe('handleAdmin', () => {
 
     it('rejects missing path and files', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_migrate', {}))
-        .rejects.toThrow('Either "path"');
+      await expect(handleAdmin(ctx, 'memoclaw_migrate', {})).rejects.toThrow('Either "path"');
     });
 
     it('handles dry run with ingest fallback', async () => {
-      const api = mockApiWithErrors(
-        {},
-        { 'POST /v1/migrate': new Error('HTTP 404: Not Found') },
-      );
+      const api = mockApiWithErrors({}, { 'POST /v1/migrate': new Error('HTTP 404: Not Found') });
       const ctx = createContext(api as any, testConfig);
       const result = await handleAdmin(ctx, 'memoclaw_migrate', {
         files: [{ filename: 'test.md', content: '# Hello' }],
@@ -262,32 +272,37 @@ describe('handleAdmin', () => {
   describe('input validation', () => {
     it('consolidate rejects invalid namespace', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_consolidate', { namespace: 'bad namespace!' }))
-        .rejects.toThrow('namespace contains invalid characters');
+      await expect(handleAdmin(ctx, 'memoclaw_consolidate', { namespace: 'bad namespace!' })).rejects.toThrow(
+        'namespace contains invalid characters',
+      );
     });
 
     it('export rejects invalid agent_id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_export', { agent_id: 'bad agent!' }))
-        .rejects.toThrow('agent_id contains invalid characters');
+      await expect(handleAdmin(ctx, 'memoclaw_export', { agent_id: 'bad agent!' })).rejects.toThrow(
+        'agent_id contains invalid characters',
+      );
     });
 
     it('tags rejects invalid namespace', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_tags', { namespace: '<script>' }))
-        .rejects.toThrow('namespace contains invalid characters');
+      await expect(handleAdmin(ctx, 'memoclaw_tags', { namespace: '<script>' })).rejects.toThrow(
+        'namespace contains invalid characters',
+      );
     });
 
     it('namespaces rejects invalid agent_id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_namespaces', { agent_id: 'has spaces' }))
-        .rejects.toThrow('agent_id contains invalid characters');
+      await expect(handleAdmin(ctx, 'memoclaw_namespaces', { agent_id: 'has spaces' })).rejects.toThrow(
+        'agent_id contains invalid characters',
+      );
     });
 
     it('core_memories rejects invalid namespace', async () => {
       const { ctx } = makeCtx();
-      await expect(handleAdmin(ctx, 'memoclaw_core_memories', { namespace: 'a&b' }))
-        .rejects.toThrow('namespace contains invalid characters');
+      await expect(handleAdmin(ctx, 'memoclaw_core_memories', { namespace: 'a&b' })).rejects.toThrow(
+        'namespace contains invalid characters',
+      );
     });
   });
 

@@ -73,7 +73,12 @@ export class CancellationError extends Error {
   }
 }
 
-export function createContext(api: ApiClient, config: Config, progress?: ProgressCallback, signal?: AbortSignal): HandlerContext {
+export function createContext(
+  api: ApiClient,
+  config: Config,
+  progress?: ProgressCallback,
+  signal?: AbortSignal,
+): HandlerContext {
   return {
     api,
     config,

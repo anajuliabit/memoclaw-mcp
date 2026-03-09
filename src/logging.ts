@@ -59,12 +59,24 @@ export class McpLogger {
   }
 
   // Convenience methods
-  debug(logger: string, data: unknown): Promise<void> { return this.log('debug', logger, data); }
-  info(logger: string, data: unknown): Promise<void> { return this.log('info', logger, data); }
-  notice(logger: string, data: unknown): Promise<void> { return this.log('notice', logger, data); }
-  warning(logger: string, data: unknown): Promise<void> { return this.log('warning', logger, data); }
-  error(logger: string, data: unknown): Promise<void> { return this.log('error', logger, data); }
-  critical(logger: string, data: unknown): Promise<void> { return this.log('critical', logger, data); }
+  debug(logger: string, data: unknown): Promise<void> {
+    return this.log('debug', logger, data);
+  }
+  info(logger: string, data: unknown): Promise<void> {
+    return this.log('info', logger, data);
+  }
+  notice(logger: string, data: unknown): Promise<void> {
+    return this.log('notice', logger, data);
+  }
+  warning(logger: string, data: unknown): Promise<void> {
+    return this.log('warning', logger, data);
+  }
+  error(logger: string, data: unknown): Promise<void> {
+    return this.log('error', logger, data);
+  }
+  critical(logger: string, data: unknown): Promise<void> {
+    return this.log('critical', logger, data);
+  }
 }
 
 /** Singleton logger instance */

@@ -12,13 +12,15 @@ function createMockApi(responses: Record<string, any> = {}) {
     makeRequest: vi.fn(async (method: string, path: string, body?: any) => {
       calls.push({ method, path, body });
       // Route responses by path pattern
-      if (path.includes('/v1/free-tier/status')) return { free_tier_remaining: 50, free_tier_total: 100, wallet: '0xtest' };
+      if (path.includes('/v1/free-tier/status'))
+        return { free_tier_remaining: 50, free_tier_total: 100, wallet: '0xtest' };
       if (path.includes('/v1/store/batch')) throw new Error('404 Not Found');
       if (path.includes('/v1/store')) return { memory: { id: `mem-${calls.length}`, content: 'test' } };
       if (path.includes('/v1/memories/bulk-delete')) throw new Error('404 Not Found');
       if (path.includes('/v1/memories/batch-update')) throw new Error('404 Not Found');
       if (path.match(/DELETE.*\/v1\/memories\//)) return { deleted: true };
-      if (path.match(/PATCH.*\/v1\/memories\//) || path.includes('/v1/memories/') && method === 'PATCH') return { memory: { id: 'test', content: 'updated' } };
+      if (path.match(/PATCH.*\/v1\/memories\//) || (path.includes('/v1/memories/') && method === 'PATCH'))
+        return { memory: { id: 'test', content: 'updated' } };
       if (path.includes('/v1/memories') && method === 'GET') {
         // For delete_namespace — return memories once, then empty
         if (responses._namespaceMemories) {
@@ -53,13 +55,13 @@ describe('progress notifications', () => {
         progressCalls.push([current, total]);
       };
 
-      await handler('memoclaw_bulk_store', {
-        memories: [
-          { content: 'memory 1' },
-          { content: 'memory 2' },
-          { content: 'memory 3' },
-        ],
-      }, progress);
+      await handler(
+        'memoclaw_bulk_store',
+        {
+          memories: [{ content: 'memory 1' }, { content: 'memory 2' }, { content: 'memory 3' }],
+        },
+        progress,
+      );
 
       expect(progressCalls.length).toBe(3);
       expect(progressCalls[progressCalls.length - 1]).toEqual([3, 3]);
@@ -75,9 +77,13 @@ describe('progress notifications', () => {
         progressCalls.push([current, total]);
       };
 
-      await handler('memoclaw_bulk_delete', {
-        ids: ['id-1', 'id-2', 'id-3'],
-      }, progress);
+      await handler(
+        'memoclaw_bulk_delete',
+        {
+          ids: ['id-1', 'id-2', 'id-3'],
+        },
+        progress,
+      );
 
       expect(progressCalls.length).toBe(3);
       expect(progressCalls[progressCalls.length - 1]).toEqual([3, 3]);
@@ -93,12 +99,16 @@ describe('progress notifications', () => {
         progressCalls.push([current, total]);
       };
 
-      await handler('memoclaw_batch_update', {
-        updates: [
-          { id: 'id-1', importance: 0.9 },
-          { id: 'id-2', importance: 0.8 },
-        ],
-      }, progress);
+      await handler(
+        'memoclaw_batch_update',
+        {
+          updates: [
+            { id: 'id-1', importance: 0.9 },
+            { id: 'id-2', importance: 0.8 },
+          ],
+        },
+        progress,
+      );
 
       expect(progressCalls.length).toBe(2);
       expect(progressCalls[progressCalls.length - 1]).toEqual([2, 2]);
@@ -119,9 +129,13 @@ describe('progress notifications', () => {
         progressCalls.push([current, total]);
       };
 
-      await handler('memoclaw_delete_namespace', {
-        namespace: 'test-ns',
-      }, progress);
+      await handler(
+        'memoclaw_delete_namespace',
+        {
+          namespace: 'test-ns',
+        },
+        progress,
+      );
 
       expect(progressCalls.length).toBeGreaterThan(0);
     });

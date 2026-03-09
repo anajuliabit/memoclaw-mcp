@@ -22,20 +22,17 @@ describe('handleMemory', () => {
 
     it('rejects empty content', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_store', { content: '' }))
-        .rejects.toThrow('content is required');
+      await expect(handleMemory(ctx, 'memoclaw_store', { content: '' })).rejects.toThrow('content is required');
     });
 
     it('rejects whitespace-only content', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_store', { content: '   ' }))
-        .rejects.toThrow('content is required');
+      await expect(handleMemory(ctx, 'memoclaw_store', { content: '   ' })).rejects.toThrow('content is required');
     });
 
     it('validates importance range', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_store', { content: 'hi', importance: 2 }))
-        .rejects.toThrow();
+      await expect(handleMemory(ctx, 'memoclaw_store', { content: 'hi', importance: 2 })).rejects.toThrow();
     });
 
     it('passes all optional fields', async () => {
@@ -43,9 +40,16 @@ describe('handleMemory', () => {
         'POST /v1/store': { memory: { id: '1', content: 'test' } },
       });
       await handleMemory(ctx, 'memoclaw_store', {
-        content: 'test', importance: 0.8, tags: ['a'], namespace: 'ns',
-        memory_type: 'fact', session_id: 's1', agent_id: 'a1',
-        expires_at: '2026-12-31', pinned: true, immutable: true,
+        content: 'test',
+        importance: 0.8,
+        tags: ['a'],
+        namespace: 'ns',
+        memory_type: 'fact',
+        session_id: 's1',
+        agent_id: 'a1',
+        expires_at: '2026-12-31',
+        pinned: true,
+        immutable: true,
       });
       const body = api.makeRequest.mock.calls[0][2];
       expect(body.importance).toBe(0.8);
@@ -67,8 +71,7 @@ describe('handleMemory', () => {
 
     it('rejects missing id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_get', {}))
-        .rejects.toThrow('id is required');
+      await expect(handleMemory(ctx, 'memoclaw_get', {})).rejects.toThrow('id is required');
     });
   });
 
@@ -101,14 +104,16 @@ describe('handleMemory', () => {
 
     it('validates namespace identifier', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_list', { namespace: 'bad namespace!' }))
-        .rejects.toThrow('namespace contains invalid characters');
+      await expect(handleMemory(ctx, 'memoclaw_list', { namespace: 'bad namespace!' })).rejects.toThrow(
+        'namespace contains invalid characters',
+      );
     });
 
     it('validates tags array', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_list', { tags: ['valid', ''] }))
-        .rejects.toThrow('tags[1] must be a non-empty string');
+      await expect(handleMemory(ctx, 'memoclaw_list', { tags: ['valid', ''] })).rejects.toThrow(
+        'tags[1] must be a non-empty string',
+      );
     });
   });
 
@@ -124,14 +129,14 @@ describe('handleMemory', () => {
 
     it('rejects missing id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_update', { content: 'x' }))
-        .rejects.toThrow('id is required');
+      await expect(handleMemory(ctx, 'memoclaw_update', { content: 'x' })).rejects.toThrow('id is required');
     });
 
     it('rejects no valid update fields', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', bad_field: 'x' }))
-        .rejects.toThrow('No valid update fields');
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', bad_field: 'x' })).rejects.toThrow(
+        'No valid update fields',
+      );
     });
 
     it('passes metadata field to API', async () => {
@@ -145,14 +150,16 @@ describe('handleMemory', () => {
 
     it('rejects invalid namespace characters in update', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', namespace: 'bad namespace!' }))
-        .rejects.toThrow('namespace contains invalid characters');
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', namespace: 'bad namespace!' })).rejects.toThrow(
+        'namespace contains invalid characters',
+      );
     });
 
     it('rejects invalid memory_type characters in update', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', memory_type: 'type with spaces' }))
-        .rejects.toThrow('memory_type contains invalid characters');
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', memory_type: 'type with spaces' })).rejects.toThrow(
+        'memory_type contains invalid characters',
+      );
     });
 
     it('passes session_id and agent_id to API', async () => {
@@ -167,8 +174,9 @@ describe('handleMemory', () => {
 
     it('validates tags in update', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', tags: [123 as any] }))
-        .rejects.toThrow('tags[0] must be a non-empty string');
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', tags: [123 as any] })).rejects.toThrow(
+        'tags[0] must be a non-empty string',
+      );
     });
   });
 
@@ -195,15 +203,13 @@ describe('handleMemory', () => {
 
     it('rejects empty ids array', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_bulk_delete', { ids: [] }))
-        .rejects.toThrow('non-empty array');
+      await expect(handleMemory(ctx, 'memoclaw_bulk_delete', { ids: [] })).rejects.toThrow('non-empty array');
     });
 
     it('rejects >100 ids', async () => {
       const { ctx } = makeCtx();
       const ids = Array.from({ length: 101 }, (_, i) => String(i));
-      await expect(handleMemory(ctx, 'memoclaw_bulk_delete', { ids }))
-        .rejects.toThrow('Maximum 100');
+      await expect(handleMemory(ctx, 'memoclaw_bulk_delete', { ids })).rejects.toThrow('Maximum 100');
     });
 
     it('falls back to one-by-one on error', async () => {
@@ -221,7 +227,13 @@ describe('handleMemory', () => {
   describe('memoclaw_bulk_store', () => {
     it('stores via batch endpoint', async () => {
       const { ctx } = makeCtx({
-        'POST /v1/store/batch': { memories: [{ id: '1', content: 'a' }, { id: '2', content: 'b' }], failed: [] },
+        'POST /v1/store/batch': {
+          memories: [
+            { id: '1', content: 'a' },
+            { id: '2', content: 'b' },
+          ],
+          failed: [],
+        },
       });
       const result = await handleMemory(ctx, 'memoclaw_bulk_store', {
         memories: [{ content: 'a' }, { content: 'b' }],
@@ -232,15 +244,16 @@ describe('handleMemory', () => {
 
     it('rejects empty memories', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_bulk_store', { memories: [] }))
-        .rejects.toThrow('non-empty array');
+      await expect(handleMemory(ctx, 'memoclaw_bulk_store', { memories: [] })).rejects.toThrow('non-empty array');
     });
 
     it('validates individual memory content', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_bulk_store', {
-        memories: [{ content: 'ok' }, { content: '' }],
-      })).rejects.toThrow('index 1');
+      await expect(
+        handleMemory(ctx, 'memoclaw_bulk_store', {
+          memories: [{ content: 'ok' }, { content: '' }],
+        }),
+      ).rejects.toThrow('index 1');
     });
 
     it('falls back to one-by-one on 404', async () => {
@@ -282,8 +295,7 @@ describe('handleMemory', () => {
 
     it('rejects empty memories', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_import', { memories: [] }))
-        .rejects.toThrow('non-empty array');
+      await expect(handleMemory(ctx, 'memoclaw_import', { memories: [] })).rejects.toThrow('non-empty array');
     });
   });
 
@@ -313,7 +325,10 @@ describe('handleMemory', () => {
         'POST /v1/memories/batch-update': { updated: 2, memories: [{ id: '1' }, { id: '2' }] },
       });
       const result = await handleMemory(ctx, 'memoclaw_batch_update', {
-        updates: [{ id: '1', content: 'new1' }, { id: '2', content: 'new2' }],
+        updates: [
+          { id: '1', content: 'new1' },
+          { id: '2', content: 'new2' },
+        ],
       });
       expect(result!.content[0].text).toContain('2 memories updated');
     });
@@ -332,22 +347,25 @@ describe('handleMemory', () => {
 
     it('rejects empty updates', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_batch_update', { updates: [] }))
-        .rejects.toThrow('non-empty array');
+      await expect(handleMemory(ctx, 'memoclaw_batch_update', { updates: [] })).rejects.toThrow('non-empty array');
     });
 
     it('rejects update missing id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_batch_update', {
-        updates: [{ content: 'no id' }],
-      })).rejects.toThrow('missing "id"');
+      await expect(
+        handleMemory(ctx, 'memoclaw_batch_update', {
+          updates: [{ content: 'no id' }],
+        }),
+      ).rejects.toThrow('missing "id"');
     });
 
     it('validates tags in individual updates', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_batch_update', {
-        updates: [{ id: '1', tags: ['valid', ''] }],
-      })).rejects.toThrow('tags[1] must be a non-empty string');
+      await expect(
+        handleMemory(ctx, 'memoclaw_batch_update', {
+          updates: [{ id: '1', tags: ['valid', ''] }],
+        }),
+      ).rejects.toThrow('tags[1] must be a non-empty string');
     });
   });
 

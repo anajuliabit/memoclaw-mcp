@@ -15,7 +15,9 @@ describe('handleRelations', () => {
         'POST /v1/memories/': { relation: { id: 'r1' } },
       });
       const result = await handleRelations(ctx, 'memoclaw_create_relation', {
-        memory_id: 'm1', target_id: 'm2', relation_type: 'related_to',
+        memory_id: 'm1',
+        target_id: 'm2',
+        relation_type: 'related_to',
       });
       expect(result!.content[0].text).toContain('Relation created');
       expect(result!.content[0].text).toContain('related_to');
@@ -23,9 +25,12 @@ describe('handleRelations', () => {
 
     it('rejects missing fields', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRelations(ctx, 'memoclaw_create_relation', {
-        memory_id: 'm1', target_id: 'm2',
-      })).rejects.toThrow('required');
+      await expect(
+        handleRelations(ctx, 'memoclaw_create_relation', {
+          memory_id: 'm1',
+          target_id: 'm2',
+        }),
+      ).rejects.toThrow('required');
     });
   });
 
@@ -48,8 +53,7 @@ describe('handleRelations', () => {
 
     it('rejects missing memory_id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRelations(ctx, 'memoclaw_list_relations', {}))
-        .rejects.toThrow('memory_id is required');
+      await expect(handleRelations(ctx, 'memoclaw_list_relations', {})).rejects.toThrow('memory_id is required');
     });
   });
 
@@ -59,15 +63,15 @@ describe('handleRelations', () => {
         'DELETE /v1/memories/': { deleted: true },
       });
       const result = await handleRelations(ctx, 'memoclaw_delete_relation', {
-        memory_id: 'm1', relation_id: 'r1',
+        memory_id: 'm1',
+        relation_id: 'r1',
       });
       expect(result!.content[0].text).toContain('Relation r1 deleted');
     });
 
     it('rejects missing ids', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRelations(ctx, 'memoclaw_delete_relation', { memory_id: 'm1' }))
-        .rejects.toThrow('required');
+      await expect(handleRelations(ctx, 'memoclaw_delete_relation', { memory_id: 'm1' })).rejects.toThrow('required');
     });
   });
 
@@ -83,7 +87,8 @@ describe('handleRelations', () => {
         },
       });
       const result = await handleRelations(ctx, 'memoclaw_graph', {
-        memory_id: 'm1', depth: 1,
+        memory_id: 'm1',
+        depth: 1,
       });
       expect(result!.content[0].text).toContain('Graph from m1');
       expect(result!.content[0].text).toContain('2 nodes');
@@ -92,8 +97,7 @@ describe('handleRelations', () => {
 
     it('rejects missing memory_id', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRelations(ctx, 'memoclaw_graph', {}))
-        .rejects.toThrow('memory_id is required');
+      await expect(handleRelations(ctx, 'memoclaw_graph', {})).rejects.toThrow('memory_id is required');
     });
 
     it('clamps depth to 1-3', async () => {
@@ -104,7 +108,8 @@ describe('handleRelations', () => {
         },
       });
       const result = await handleRelations(ctx, 'memoclaw_graph', {
-        memory_id: 'm1', depth: 10,
+        memory_id: 'm1',
+        depth: 10,
       });
       expect(result!.content[0].text).toContain('depth 3');
     });

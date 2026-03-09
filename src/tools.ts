@@ -78,13 +78,23 @@ const NAMESPACE_OBJECT_SCHEMA = {
 };
 
 const COMMON_FILTERS = {
-  tags: { type: 'array' as const, items: { type: 'string' as const }, description: 'Filter by tags (memories must have ALL specified tags).' },
+  tags: {
+    type: 'array' as const,
+    items: { type: 'string' as const },
+    description: 'Filter by tags (memories must have ALL specified tags).',
+  },
   namespace: { type: 'string' as const, description: 'Filter by namespace.' },
   memory_type: { type: 'string' as const, enum: MEMORY_TYPE_ENUM, description: 'Filter by memory type.' },
   session_id: { type: 'string' as const, description: 'Filter by session ID.' },
   agent_id: { type: 'string' as const, description: 'Filter by agent ID.' },
-  after: { type: 'string' as const, description: 'Only return memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".' },
-  before: { type: 'string' as const, description: 'Only return memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".' },
+  after: {
+    type: 'string' as const,
+    description: 'Only return memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".',
+  },
+  before: {
+    type: 'string' as const,
+    description: 'Only return memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".',
+  },
 };
 
 export const TOOLS = [
@@ -105,16 +115,47 @@ export const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        content: { type: 'string', description: 'The text content to remember. Be specific and self-contained — this is what gets embedded and searched.' },
-        importance: { type: 'number', description: 'Importance score from 0.0 (trivial) to 1.0 (critical). Default: 0.5. Higher importance memories rank higher in recall.' },
-        tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization and filtering, e.g. ["project-x", "frontend"]' },
-        namespace: { type: 'string', description: 'Namespace to isolate this memory, e.g. "work" or "personal". Memories in different namespaces are separate.' },
-        memory_type: { type: 'string', enum: MEMORY_TYPE_ENUM, description: 'Memory type controls decay rate. "correction" and "preference" decay slowest; "observation" decays fastest. Default: "general".' },
+        content: {
+          type: 'string',
+          description:
+            'The text content to remember. Be specific and self-contained — this is what gets embedded and searched.',
+        },
+        importance: {
+          type: 'number',
+          description:
+            'Importance score from 0.0 (trivial) to 1.0 (critical). Default: 0.5. Higher importance memories rank higher in recall.',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Tags for categorization and filtering, e.g. ["project-x", "frontend"]',
+        },
+        namespace: {
+          type: 'string',
+          description:
+            'Namespace to isolate this memory, e.g. "work" or "personal". Memories in different namespaces are separate.',
+        },
+        memory_type: {
+          type: 'string',
+          enum: MEMORY_TYPE_ENUM,
+          description:
+            'Memory type controls decay rate. "correction" and "preference" decay slowest; "observation" decays fastest. Default: "general".',
+        },
         session_id: { type: 'string', description: 'Session ID to group memories from the same conversation.' },
         agent_id: { type: 'string', description: 'Agent ID to scope memories to a specific agent.' },
-        pinned: { type: 'boolean', description: 'If true, this memory is exempt from decay and will persist indefinitely.' },
-        expires_at: { type: 'string', description: 'ISO 8601 date when this memory auto-deletes, e.g. "2025-12-31T00:00:00Z".' },
-        immutable: { type: 'boolean', description: 'If true, this memory cannot be updated or deleted after creation. This is a one-way operation and cannot be reversed.' },
+        pinned: {
+          type: 'boolean',
+          description: 'If true, this memory is exempt from decay and will persist indefinitely.',
+        },
+        expires_at: {
+          type: 'string',
+          description: 'ISO 8601 date when this memory auto-deletes, e.g. "2025-12-31T00:00:00Z".',
+        },
+        immutable: {
+          type: 'boolean',
+          description:
+            'If true, this memory cannot be updated or deleted after creation. This is a one-way operation and cannot be reversed.',
+        },
       },
       required: ['content'],
     },
@@ -130,7 +171,7 @@ export const TOOLS = [
     name: 'memoclaw_recall',
     description:
       '🔍 SEMANTIC SEARCH: Find memories by meaning, not exact words. ' +
-      'This tool finds memories that are similar in meaning to your query, even if they don\'t contain the exact same words. ' +
+      "This tool finds memories that are similar in meaning to your query, even if they don't contain the exact same words. " +
       'Returns results ranked by similarity score (0-1). Use min_similarity=0.3+ to filter low-quality matches. ' +
       'Set include_relations=true to also fetch related memories via the knowledge graph. ' +
       '💡 TIP: If you know the memory ID, use memoclaw_get (faster). For exact keyword matching, use memoclaw_search.',
@@ -144,11 +185,20 @@ export const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        query: { type: 'string', description: 'Natural language search query. Describe what you\'re looking for in plain English.' },
+        query: {
+          type: 'string',
+          description: "Natural language search query. Describe what you're looking for in plain English.",
+        },
         limit: { type: 'number', description: 'Maximum number of results to return. Default: 5. Max: 50.' },
-        min_similarity: { type: 'number', description: 'Minimum similarity threshold (0.0-1.0). Default: 0. Recommended: 0.3+ for relevant results.' },
+        min_similarity: {
+          type: 'number',
+          description: 'Minimum similarity threshold (0.0-1.0). Default: 0. Recommended: 0.3+ for relevant results.',
+        },
         ...COMMON_FILTERS,
-        include_relations: { type: 'boolean', description: 'If true, include related memories (via relations) in the response.' },
+        include_relations: {
+          type: 'boolean',
+          description: 'If true, include related memories (via relations) in the response.',
+        },
       },
       required: ['query'],
     },
@@ -192,8 +242,7 @@ export const TOOLS = [
   },
   {
     name: 'memoclaw_get',
-    description:
-      'Retrieve a single memory by its exact ID. Use this when you already know the memory ID.',
+    description: 'Retrieve a single memory by its exact ID. Use this when you already know the memory ID.',
     title: 'Get memory',
     annotations: {
       readOnlyHint: true,
@@ -323,7 +372,11 @@ export const TOOLS = [
         expires_at: { type: 'string', description: 'New expiry date (ISO 8601) or null to remove.' },
         pinned: { type: 'boolean', description: 'Pin or unpin the memory.' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Replace tags array.' },
-        immutable: { type: 'boolean', description: 'Set to true to make this memory immutable. WARNING: This is a one-way operation — once set, the memory cannot be updated or deleted.' },
+        immutable: {
+          type: 'boolean',
+          description:
+            'Set to true to make this memory immutable. WARNING: This is a one-way operation — once set, the memory cannot be updated or deleted.',
+        },
         session_id: { type: 'string', description: 'Update the session ID associated with this memory.' },
         agent_id: { type: 'string', description: 'Update the agent ID associated with this memory.' },
       },
@@ -339,7 +392,7 @@ export const TOOLS = [
   },
   {
     name: 'memoclaw_status',
-    description: 'Check your wallet\'s free tier usage. Shows remaining API calls out of 100.',
+    description: "Check your wallet's free tier usage. Shows remaining API calls out of 100.",
     title: 'Free tier status',
     annotations: {
       readOnlyHint: true,
@@ -373,7 +426,11 @@ export const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } }, description: 'Conversation messages array.' },
+        messages: {
+          type: 'array',
+          items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } },
+          description: 'Conversation messages array.',
+        },
         text: { type: 'string', description: 'Raw text to extract facts from (alternative to messages).' },
         namespace: { type: 'string', description: 'Namespace for all extracted memories.' },
         session_id: { type: 'string', description: 'Session ID for all extracted memories.' },
@@ -405,7 +462,11 @@ export const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } }, description: 'Conversation messages to extract facts from.' },
+        messages: {
+          type: 'array',
+          items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } },
+          description: 'Conversation messages to extract facts from.',
+        },
         namespace: { type: 'string', description: 'Namespace for extracted memories.' },
         session_id: { type: 'string', description: 'Session ID.' },
         agent_id: { type: 'string', description: 'Agent ID.' },
@@ -416,14 +477,23 @@ export const TOOLS = [
       type: 'object' as const,
       properties: {
         memories: { type: 'array' as const, items: MEMORY_OBJECT_SCHEMA },
-        facts: { type: 'array' as const, items: { type: 'object' as const, properties: { content: { type: 'string' as const }, importance: { type: 'number' as const }, memory_type: { type: 'string' as const } } } },
+        facts: {
+          type: 'array' as const,
+          items: {
+            type: 'object' as const,
+            properties: {
+              content: { type: 'string' as const },
+              importance: { type: 'number' as const },
+              memory_type: { type: 'string' as const },
+            },
+          },
+        },
       },
     },
   },
   {
     name: 'memoclaw_consolidate',
-    description:
-      'Merge similar/duplicate memories by clustering. Use dry_run=true first to preview.',
+    description: 'Merge similar/duplicate memories by clustering. Use dry_run=true first to preview.',
     title: 'Consolidate memories',
     annotations: {
       readOnlyHint: false,
@@ -446,14 +516,22 @@ export const TOOLS = [
       properties: {
         merged: { type: 'number' as const },
         deleted: { type: 'number' as const },
-        clusters: { type: 'array' as const, items: { type: 'object' as const, properties: { kept: { type: 'string' as const }, merged_ids: { type: 'array' as const, items: { type: 'string' as const } } } } },
+        clusters: {
+          type: 'array' as const,
+          items: {
+            type: 'object' as const,
+            properties: {
+              kept: { type: 'string' as const },
+              merged_ids: { type: 'array' as const, items: { type: 'string' as const } },
+            },
+          },
+        },
       },
     },
   },
   {
     name: 'memoclaw_suggested',
-    description:
-      'Get proactive memory suggestions: stale, fresh, hot, or decaying memories.',
+    description: 'Get proactive memory suggestions: stale, fresh, hot, or decaying memories.',
     title: 'Suggested memories',
     annotations: {
       readOnlyHint: true,
@@ -481,8 +559,7 @@ export const TOOLS = [
   },
   {
     name: 'memoclaw_create_relation',
-    description:
-      'Create a directed relationship between two memories for the knowledge graph.',
+    description: 'Create a directed relationship between two memories for the knowledge graph.',
     title: 'Create relation',
     annotations: {
       readOnlyHint: false,
@@ -495,7 +572,11 @@ export const TOOLS = [
       properties: {
         memory_id: { type: 'string', description: 'Source memory ID.' },
         target_id: { type: 'string', description: 'Target memory ID.' },
-        relation_type: { type: 'string', enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'], description: 'Type of relationship.' },
+        relation_type: {
+          type: 'string',
+          enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'],
+          description: 'Type of relationship.',
+        },
         metadata: { type: 'object', description: 'Optional metadata for the relation.' },
       },
       required: ['memory_id', 'target_id', 'relation_type'],
@@ -589,8 +670,7 @@ export const TOOLS = [
   },
   {
     name: 'memoclaw_import',
-    description:
-      'Import memories from a JSON array. Each object must have a "content" field. Max 100 per call.',
+    description: 'Import memories from a JSON array. Each object must have a "content" field. Max 100 per call.',
     title: 'Import memories',
     annotations: {
       readOnlyHint: false,
@@ -683,7 +763,8 @@ export const TOOLS = [
   },
   {
     name: 'memoclaw_count',
-    description: 'Get a count of memories, optionally filtered. Faster than memoclaw_list when you only need the total.',
+    description:
+      'Get a count of memories, optionally filtered. Faster than memoclaw_list when you only need the total.',
     title: 'Count memories',
     annotations: {
       readOnlyHint: true,
@@ -699,8 +780,14 @@ export const TOOLS = [
         agent_id: { type: 'string', description: 'Count only memories from this agent.' },
         memory_type: { type: 'string', enum: MEMORY_TYPE_ENUM, description: 'Count only memories of this type.' },
         session_id: { type: 'string', description: 'Count only memories from this session.' },
-        after: { type: 'string', description: 'Count only memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".' },
-        before: { type: 'string', description: 'Count only memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".' },
+        after: {
+          type: 'string',
+          description: 'Count only memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".',
+        },
+        before: {
+          type: 'string',
+          description: 'Count only memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".',
+        },
       },
     },
     outputSchema: {
@@ -816,8 +903,7 @@ export const TOOLS = [
   },
   {
     name: 'memoclaw_graph',
-    description:
-      'Traverse the memory graph from a starting memory up to a specified depth.',
+    description: 'Traverse the memory graph from a starting memory up to a specified depth.',
     title: 'Traverse graph',
     annotations: {
       readOnlyHint: true,
@@ -830,7 +916,11 @@ export const TOOLS = [
       properties: {
         memory_id: { type: 'string', description: 'Starting memory ID.' },
         depth: { type: 'number', minimum: 1, maximum: 3, description: 'Hops to traverse. Default: 1. Max: 3.' },
-        relation_type: { type: 'string', enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'], description: 'Only follow this relation type.' },
+        relation_type: {
+          type: 'string',
+          enum: ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'],
+          description: 'Only follow this relation type.',
+        },
       },
       required: ['memory_id'],
     },
@@ -977,8 +1067,7 @@ export const TOOLS = [
   {
     name: 'memoclaw_context',
     description:
-      '🧠 CONTEXT: Get contextually relevant memories using GPT-4o-mini analysis. ' +
-      'Costs $0.01 per call.',
+      '🧠 CONTEXT: Get contextually relevant memories using GPT-4o-mini analysis. ' + 'Costs $0.01 per call.',
     title: 'Get context',
     annotations: {
       readOnlyHint: true,
@@ -1099,8 +1188,20 @@ export const TOOLS = [
         avg_importance: { type: 'number' as const },
         oldest_memory: { type: 'string' as const },
         newest_memory: { type: 'string' as const },
-        by_type: { type: 'array' as const, items: { type: 'object' as const, properties: { memory_type: { type: 'string' as const }, count: { type: 'number' as const } } } },
-        by_namespace: { type: 'array' as const, items: { type: 'object' as const, properties: { namespace: { type: 'string' as const }, count: { type: 'number' as const } } } },
+        by_type: {
+          type: 'array' as const,
+          items: {
+            type: 'object' as const,
+            properties: { memory_type: { type: 'string' as const }, count: { type: 'number' as const } },
+          },
+        },
+        by_namespace: {
+          type: 'array' as const,
+          items: {
+            type: 'object' as const,
+            properties: { namespace: { type: 'string' as const }, count: { type: 'number' as const } },
+          },
+        },
       },
     },
   },
@@ -1121,8 +1222,14 @@ export const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        content: { type: 'string', description: 'The content you plan to store. This will be compared semantically against existing memories.' },
-        min_similarity: { type: 'number', description: 'Minimum similarity threshold (0.0-1.0). Default: 0.7. Higher values = stricter matching.' },
+        content: {
+          type: 'string',
+          description: 'The content you plan to store. This will be compared semantically against existing memories.',
+        },
+        min_similarity: {
+          type: 'number',
+          description: 'Minimum similarity threshold (0.0-1.0). Default: 0.7. Higher values = stricter matching.',
+        },
         namespace: { type: 'string', description: 'Only check within this namespace.' },
         limit: { type: 'number', description: 'Maximum number of potential duplicates to return. Default: 5.' },
       },

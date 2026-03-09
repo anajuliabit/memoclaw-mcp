@@ -83,13 +83,15 @@ export function createApiClient(config: Config) {
 
         // Handle 402 Payment Required (free tier exhausted) — no retry needed
         if (res.status === 402) {
-          mcpLogger.info('api', { event: 'payment_required', method, path, message: 'Free tier exhausted, using x402 payment' });
+          mcpLogger.info('api', {
+            event: 'payment_required',
+            method,
+            path,
+            message: 'Free tier exhausted, using x402 payment',
+          });
           const errorBody = await res.json();
           const client = getX402Client();
-          const paymentRequired = client.getPaymentRequiredResponse(
-            (name: string) => res.headers.get(name),
-            errorBody
-          );
+          const paymentRequired = client.getPaymentRequiredResponse((name: string) => res.headers.get(name), errorBody);
 
           const paymentPayload = await client.createPaymentPayload(paymentRequired);
           const paymentHeaders = client.encodePaymentSignatureHeader(paymentPayload);

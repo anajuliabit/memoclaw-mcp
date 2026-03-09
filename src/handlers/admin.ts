@@ -1,12 +1,31 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, basename } from 'node:path';
-import { formatMemory, withConcurrency, validateContentLength, validateImportance, userAndAssistantText, assistantText, userText, memoryResourceLink } from '../format.js';
+import {
+  formatMemory,
+  withConcurrency,
+  validateContentLength,
+  validateImportance,
+  userAndAssistantText,
+  assistantText,
+  userText,
+  memoryResourceLink,
+} from '../format.js';
 import { validateIdentifier, validateId, validateISODate } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
-  StatusArgs, InitArgs, IngestArgs, ExtractArgs, ConsolidateArgs,
-  ExportArgs, MigrateArgs, DeleteNamespaceArgs, TagsArgs, HistoryArgs,
-  NamespacesArgs, CoreMemoriesArgs, StatsArgs,
+  StatusArgs,
+  InitArgs,
+  IngestArgs,
+  ExtractArgs,
+  ConsolidateArgs,
+  ExportArgs,
+  MigrateArgs,
+  DeleteNamespaceArgs,
+  TagsArgs,
+  HistoryArgs,
+  NamespacesArgs,
+  CoreMemoriesArgs,
+  StatsArgs,
 } from '../types.js';
 
 export async function handleAdmin(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
@@ -75,7 +94,12 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
       const result = await makeRequest('POST', '/v1/ingest', {
-        messages, text, namespace, session_id, agent_id, auto_relate: auto_relate !== false,
+        messages,
+        text,
+        namespace,
+        session_id,
+        agent_id,
+        auto_relate: auto_relate !== false,
       });
       const memoriesCreated = result.memories_created ?? result.count ?? 0;
       const memories = result.memories || result.data || [];
@@ -117,10 +141,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('POST', '/v1/memories/consolidate', body);
       const prefix = dry_run ? '🔍 Consolidation preview (dry run)' : '✅ Consolidation complete';
       return {
-        content: [
-          userAndAssistantText(prefix),
-          assistantText(JSON.stringify(result, null, 2)),
-        ],
+        content: [userAndAssistantText(prefix), assistantText(JSON.stringify(result, null, 2))],
         structuredContent: result,
       };
     }
@@ -138,14 +159,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const result = await makeRequest('GET', `/v1/export${query ? `?${query}` : ''}`);
         const memories = result.memories || result.data || result;
         const list = Array.isArray(memories) ? memories : [];
-        const output = fmt === 'jsonl'
-          ? list.map((m: any) => JSON.stringify(m)).join('\n')
-          : JSON.stringify(list, null, 2);
+        const output =
+          fmt === 'jsonl' ? list.map((m: any) => JSON.stringify(m)).join('\n') : JSON.stringify(list, null, 2);
         return {
-          content: [
-            userAndAssistantText(`📦 Exported ${list.length} memories`),
-            assistantText(output),
-          ],
+          content: [userAndAssistantText(`📦 Exported ${list.length} memories`), assistantText(output)],
           structuredContent: { memories: list, count: list.length },
         };
       } catch (exportErr: any) {
@@ -160,7 +177,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         let exportPage = 0;
         let exportCancelled = false;
         while (true) {
-          if (signal.aborted) { exportCancelled = true; break; }
+          if (signal.aborted) {
+            exportCancelled = true;
+            break;
+          }
           exportPage++;
           const fallbackParams = new URLSearchParams();
           fallbackParams.set('limit', String(pageSize));
@@ -174,15 +194,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           if (memories.length < pageSize) break;
           offset += pageSize;
         }
-        const output = fmt === 'jsonl'
-          ? allMemories.map((m: any) => JSON.stringify(m)).join('\n')
-          : JSON.stringify(allMemories, null, 2);
+        const output =
+          fmt === 'jsonl'
+            ? allMemories.map((m: any) => JSON.stringify(m)).join('\n')
+            : JSON.stringify(allMemories, null, 2);
         const exportPrefix = exportCancelled ? '⚠️ Export cancelled — partial result' : '📦 Exported';
         return {
-          content: [
-            userAndAssistantText(`${exportPrefix}: ${allMemories.length} memories`),
-            assistantText(output),
-          ],
+          content: [userAndAssistantText(`${exportPrefix}: ${allMemories.length} memories`), assistantText(output)],
           structuredContent: { memories: allMemories, count: allMemories.length, cancelled: exportCancelled },
         };
       }
@@ -213,7 +231,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
             const results: Array<{ filename: string; content: string }> = [];
             for (const entry of entries) {
               if (entry.startsWith('.')) continue;
-              results.push(...await collectFiles(join(p, entry)));
+              results.push(...(await collectFiles(join(p, entry))));
             }
             return results;
           }
@@ -245,18 +263,34 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           .map((m: any) => memoryResourceLink(m.id, 'Migrated memory'));
         return {
           content: [
-            userAndAssistantText(`${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}`),
+            userAndAssistantText(
+              `${prefix}\n\n📁 Files processed: ${fileList.length}\n📝 Memories created: ${created}\n🔄 Duplicates skipped: ${skipped}`,
+            ),
             assistantText(JSON.stringify(result, null, 2)),
             ...resourceLinks,
           ],
-          structuredContent: { files_processed: fileList.length, memories_created: typeof created === 'number' ? created : 0, duplicates_skipped: skipped, memories: migratedMemories },
+          structuredContent: {
+            files_processed: fileList.length,
+            memories_created: typeof created === 'number' ? created : 0,
+            duplicates_skipped: skipped,
+            memories: migratedMemories,
+          },
         };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
           if (dry_run) {
             return {
-              content: [userAndAssistantText(`🔍 Migration preview (dry run — /v1/migrate not available, would use ingest fallback)\n\n📁 ${fileList.length} files would be ingested:\n${fileList.map(f => `  • ${f.filename} (${f.content.length} chars)`).join('\n')}`)],
-              structuredContent: { files_processed: fileList.length, memories_created: 0, duplicates_skipped: 0, memories: [] },
+              content: [
+                userAndAssistantText(
+                  `🔍 Migration preview (dry run — /v1/migrate not available, would use ingest fallback)\n\n📁 ${fileList.length} files would be ingested:\n${fileList.map((f) => `  • ${f.filename} (${f.content.length} chars)`).join('\n')}`,
+                ),
+              ],
+              structuredContent: {
+                files_processed: fileList.length,
+                memories_created: 0,
+                duplicates_skipped: 0,
+                memories: [],
+              },
             };
           }
           let totalCreated = 0;
@@ -264,7 +298,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           const errors: string[] = [];
           let migrateCancelled = false;
           for (let fi = 0; fi < fileList.length; fi++) {
-            if (signal.aborted) { migrateCancelled = true; break; }
+            if (signal.aborted) {
+              migrateCancelled = true;
+              break;
+            }
             const file = fileList[fi];
             try {
               const r = await makeRequest('POST', '/v1/ingest', {
@@ -286,7 +323,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
           if (errors.length > 0) text += `\n\n❌ Errors:\n${errors.join('\n')}`;
           return {
             content: [userAndAssistantText(text)],
-            structuredContent: { files_processed: filesProcessed, memories_created: totalCreated, duplicates_skipped: 0, memories: [], cancelled: migrateCancelled },
+            structuredContent: {
+              files_processed: filesProcessed,
+              memories_created: totalCreated,
+              duplicates_skipped: 0,
+              memories: [],
+              cancelled: migrateCancelled,
+            },
           };
         }
         throw err;
@@ -306,7 +349,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       let nsCancelled = false;
 
       while (pages < 200) {
-        if (signal.aborted) { nsCancelled = true; break; }
+        if (signal.aborted) {
+          nsCancelled = true;
+          break;
+        }
         pages++;
         const params = new URLSearchParams();
         params.set('limit', String(pageSize));
@@ -321,7 +367,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const deleteResults = await withConcurrency(
           toDelete.map((m: any) => () => makeRequest('DELETE', `/v1/memories/${m.id}`)),
           10,
-          signal
+          signal,
         );
         let pageSuccesses = 0;
         for (let i = 0; i < deleteResults.length; i++) {
@@ -331,11 +377,16 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
             pageSuccesses++;
           } else {
             failedIds.add(toDelete[i].id);
-            errors.push(`${toDelete[i].id}: ${(deleteResults[i] as PromiseRejectedResult).reason?.message || 'unknown'}`);
+            errors.push(
+              `${toDelete[i].id}: ${(deleteResults[i] as PromiseRejectedResult).reason?.message || 'unknown'}`,
+            );
           }
         }
         await progress(deletedIds.length, deletedIds.length + (memories.length >= pageSize ? pageSize : 0));
-        if (signal.aborted) { nsCancelled = true; break; }
+        if (signal.aborted) {
+          nsCancelled = true;
+          break;
+        }
         if (memories.length < pageSize) break;
         if (pageSuccesses === 0) break;
       }
@@ -346,7 +397,13 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       if (errors.length > 0) text += `, ${errors.length} failed\n\nErrors:\n${errors.slice(0, 10).join('\n')}`;
       return {
         content: [userAndAssistantText(text)],
-        structuredContent: { deleted: deletedIds.length, failed: errors.length, namespace, errors: errors.slice(0, 10), cancelled: nsCancelled },
+        structuredContent: {
+          deleted: deletedIds.length,
+          failed: errors.length,
+          namespace,
+          errors: errors.slice(0, 10),
+          cancelled: nsCancelled,
+        },
       };
     }
 
@@ -362,14 +419,20 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const result = await makeRequest('GET', `/v1/tags${qs ? '?' + qs : ''}`);
         if (result.tags) {
           const tags = result.tags;
-          if (tags.length === 0) return { content: [userText('No tags found across memories.', 0.3)], structuredContent: { tags: [] } };
+          if (tags.length === 0)
+            return { content: [userText('No tags found across memories.', 0.3)], structuredContent: { tags: [] } };
           const normalized = tags.map((t: any) =>
-            typeof t === 'string' ? { tag: t, count: 0 } : { tag: t.tag || t.name, count: t.count ?? 0 }
+            typeof t === 'string' ? { tag: t, count: 0 } : { tag: t.tag || t.name, count: t.count ?? 0 },
           );
           const lines = normalized.map((t: any) => `  • ${t.tag}: ${t.count} memories`);
-          return { content: [userText(`🏷️ ${tags.length} tags:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { tags: normalized } };
+          return {
+            content: [userText(`🏷️ ${tags.length} tags:\n\n${lines.join('\n')}`, 0.5)],
+            structuredContent: { tags: normalized },
+          };
         }
-      } catch { /* fall through to client-side */ }
+      } catch {
+        /* fall through to client-side */
+      }
 
       const tagCounts = new Map<string, number>();
       let offset = 0;
@@ -391,11 +454,15 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (memories.length < pageSize) break;
         offset += pageSize;
       }
-      if (tagCounts.size === 0) return { content: [userText('No tags found across memories.', 0.3)], structuredContent: { tags: [] } };
+      if (tagCounts.size === 0)
+        return { content: [userText('No tags found across memories.', 0.3)], structuredContent: { tags: [] } };
       const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
       const normalizedTags = sorted.map(([tag, count]) => ({ tag, count }));
       const lines = sorted.map(([tag, count]) => `  • ${tag}: ${count} memories`);
-      return { content: [userText(`🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { tags: normalizedTags } };
+      return {
+        content: [userText(`🏷️ ${sorted.length} tags:\n\n${lines.join('\n')}`, 0.5)],
+        structuredContent: { tags: normalizedTags },
+      };
     }
 
     case 'memoclaw_history': {
@@ -404,22 +471,31 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('GET', `/v1/memories/${id}/history`);
       const history = result.history || result.versions || result.data || [];
       if (history.length === 0) {
-        return { content: [userText(`No edit history found for memory ${id}.`, 0.3)], structuredContent: { history: [] } };
+        return {
+          content: [userText(`No edit history found for memory ${id}.`, 0.3)],
+          structuredContent: { history: [] },
+        };
       }
-      const formatted = history.map((entry: any, i: number) => {
-        const parts = [`Version ${i + 1}`];
-        if (entry.content) parts.push(`  content: ${entry.content.substring(0, 200)}${entry.content.length > 200 ? '...' : ''}`);
-        if (entry.importance !== undefined) parts.push(`  importance: ${entry.importance}`);
-        if (entry.tags?.length) parts.push(`  tags: ${entry.tags.join(', ')}`);
-        if (entry.memory_type) parts.push(`  type: ${entry.memory_type}`);
-        if (entry.namespace) parts.push(`  namespace: ${entry.namespace}`);
-        if (entry.pinned !== undefined) parts.push(`  pinned: ${entry.pinned}`);
-        if (entry.changed_at || entry.updated_at || entry.created_at) {
-          parts.push(`  date: ${entry.changed_at || entry.updated_at || entry.created_at}`);
-        }
-        if (entry.changed_fields) parts.push(`  changed: ${Array.isArray(entry.changed_fields) ? entry.changed_fields.join(', ') : entry.changed_fields}`);
-        return parts.join('\n');
-      }).join('\n\n');
+      const formatted = history
+        .map((entry: any, i: number) => {
+          const parts = [`Version ${i + 1}`];
+          if (entry.content)
+            parts.push(`  content: ${entry.content.substring(0, 200)}${entry.content.length > 200 ? '...' : ''}`);
+          if (entry.importance !== undefined) parts.push(`  importance: ${entry.importance}`);
+          if (entry.tags?.length) parts.push(`  tags: ${entry.tags.join(', ')}`);
+          if (entry.memory_type) parts.push(`  type: ${entry.memory_type}`);
+          if (entry.namespace) parts.push(`  namespace: ${entry.namespace}`);
+          if (entry.pinned !== undefined) parts.push(`  pinned: ${entry.pinned}`);
+          if (entry.changed_at || entry.updated_at || entry.created_at) {
+            parts.push(`  date: ${entry.changed_at || entry.updated_at || entry.created_at}`);
+          }
+          if (entry.changed_fields)
+            parts.push(
+              `  changed: ${Array.isArray(entry.changed_fields) ? entry.changed_fields.join(', ') : entry.changed_fields}`,
+            );
+          return parts.join('\n');
+        })
+        .join('\n\n');
       return {
         content: [
           userAndAssistantText(`📜 History for memory ${id} (${history.length} versions):\n\n${formatted}`),
@@ -439,14 +515,25 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         const result = await makeRequest('GET', `/v1/namespaces${qs ? '?' + qs : ''}`);
         if (result.namespaces) {
           const namespaces = result.namespaces;
-          if (namespaces.length === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)], structuredContent: { namespaces: [] } };
+          if (namespaces.length === 0)
+            return {
+              content: [userText('No memories found — no namespaces to list.', 0.3)],
+              structuredContent: { namespaces: [] },
+            };
           const normalized = namespaces.map((n: any) =>
-            typeof n === 'string' ? { namespace: n, count: 0 } : { namespace: n.namespace || n.name || '(default)', count: n.count ?? 0 }
+            typeof n === 'string'
+              ? { namespace: n, count: 0 }
+              : { namespace: n.namespace || n.name || '(default)', count: n.count ?? 0 },
           );
           const lines = normalized.map((n: any) => `  • ${n.namespace}: ${n.count} memories`);
-          return { content: [userText(`📁 ${namespaces.length} namespaces:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { namespaces: normalized } };
+          return {
+            content: [userText(`📁 ${namespaces.length} namespaces:\n\n${lines.join('\n')}`, 0.5)],
+            structuredContent: { namespaces: normalized },
+          };
         }
-      } catch { /* fall through */ }
+      } catch {
+        /* fall through */
+      }
 
       const nsCounts = new Map<string, number>();
       let offset = 0;
@@ -467,11 +554,18 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (memories.length < pageSize) break;
         offset += pageSize;
       }
-      if (nsCounts.size === 0) return { content: [userText('No memories found — no namespaces to list.', 0.3)], structuredContent: { namespaces: [] } };
+      if (nsCounts.size === 0)
+        return {
+          content: [userText('No memories found — no namespaces to list.', 0.3)],
+          structuredContent: { namespaces: [] },
+        };
       const sorted = [...nsCounts.entries()].sort((a, b) => b[1] - a[1]);
       const normalizedNs = sorted.map(([ns, count]) => ({ namespace: ns, count }));
       const lines = sorted.map(([ns, count]) => `  • ${ns}: ${count} memories`);
-      return { content: [userText(`📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}`, 0.5)], structuredContent: { namespaces: normalizedNs } };
+      return {
+        content: [userText(`📁 ${sorted.length} namespaces:\n\n${lines.join('\n')}`, 0.5)],
+        structuredContent: { namespaces: normalizedNs },
+      };
     }
 
     case 'memoclaw_core_memories': {
@@ -486,7 +580,12 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const result = await makeRequest('GET', `/v1/core-memories${qs ? '?' + qs : ''}`);
       const memories = result.memories || result.core_memories || result.data || [];
       if (memories.length === 0) {
-        return { content: [userText('No core memories found. Store important memories with high importance scores or pin them.', 0.3)], structuredContent: { memories: [] } };
+        return {
+          content: [
+            userText('No core memories found. Store important memories with high importance scores or pin them.', 0.3),
+          ],
+          structuredContent: { memories: [] },
+        };
       }
       const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
       return {
@@ -505,7 +604,10 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       if (result.pinned_count !== undefined) lines.push(`Pinned: ${result.pinned_count}`);
       if (result.never_accessed !== undefined) lines.push(`Never accessed: ${result.never_accessed}`);
       if (result.total_accesses !== undefined) lines.push(`Total accesses: ${result.total_accesses}`);
-      if (result.avg_importance !== undefined) lines.push(`Avg importance: ${typeof result.avg_importance === 'number' ? result.avg_importance.toFixed(2) : result.avg_importance}`);
+      if (result.avg_importance !== undefined)
+        lines.push(
+          `Avg importance: ${typeof result.avg_importance === 'number' ? result.avg_importance.toFixed(2) : result.avg_importance}`,
+        );
       if (result.oldest_memory) lines.push(`Oldest: ${result.oldest_memory}`);
       if (result.newest_memory) lines.push(`Newest: ${result.newest_memory}`);
       if (result.by_type?.length) {

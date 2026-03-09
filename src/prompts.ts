@@ -25,8 +25,7 @@ export const PROMPTS = [
   },
   {
     name: 'load-context',
-    description:
-      'Load relevant memories for a task. Performs semantic recall and returns a context-ready summary.',
+    description: 'Load relevant memories for a task. Performs semantic recall and returns a context-ready summary.',
     arguments: [
       {
         name: 'task',
@@ -78,7 +77,7 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
 
   return async function handleGetPrompt(
     name: string,
-    args: Record<string, string> | undefined
+    args: Record<string, string> | undefined,
   ): Promise<{ description?: string; messages: PromptMessage[] }> {
     switch (name) {
       case 'review-memories': {
@@ -91,9 +90,8 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
         const memories = result.memories || result.data || [];
 
         const nsLabel = namespace ? `namespace "${namespace}"` : 'default namespace';
-        const memoryList = memories.length > 0
-          ? memories.map((m: any) => formatMemory(m)).join('\n\n')
-          : '(no memories found)';
+        const memoryList =
+          memories.length > 0 ? memories.map((m: any) => formatMemory(m)).join('\n\n') : '(no memories found)';
 
         return {
           description: `Review memories in ${nsLabel}`,
@@ -102,7 +100,8 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
               role: 'user',
               content: {
                 type: 'text',
-                text: `Review the following ${memories.length} memories in ${nsLabel}. Identify:\n` +
+                text:
+                  `Review the following ${memories.length} memories in ${nsLabel}. Identify:\n` +
                   `1. **Duplicates** — memories with very similar content that could be consolidated\n` +
                   `2. **Stale items** — memories that seem outdated or no longer relevant\n` +
                   `3. **Low-value** — memories with low importance that add little value\n` +
@@ -126,9 +125,8 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
         const result = await makeRequest('POST', '/v1/recall', body);
         const memories = result.memories || result.data || [];
 
-        const memoryList = memories.length > 0
-          ? memories.map((m: any) => formatMemory(m)).join('\n\n')
-          : '(no relevant memories found)';
+        const memoryList =
+          memories.length > 0 ? memories.map((m: any) => formatMemory(m)).join('\n\n') : '(no relevant memories found)';
 
         return {
           description: `Load context for: ${task}`,
@@ -137,9 +135,11 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
               role: 'user',
               content: {
                 type: 'text',
-                text: `I need to work on the following task:\n\n**${task}**\n\n` +
+                text:
+                  `I need to work on the following task:\n\n**${task}**\n\n` +
                   `Here are the ${memories.length} most relevant memories from my store` +
-                  (namespace ? ` (namespace: ${namespace})` : '') + `:\n\n` +
+                  (namespace ? ` (namespace: ${namespace})` : '') +
+                  `:\n\n` +
                   `---\n\n${memoryList}\n\n---\n\n` +
                   `Based on these memories, provide a brief context summary highlighting ` +
                   `the most important information relevant to this task. Note any potential ` +
@@ -176,13 +176,18 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
         const oldestMemories = oldResult.memories || oldResult.data || [];
 
         const statsText = JSON.stringify(stats, null, 2);
-        const nsText = namespaces.length > 0
-          ? namespaces.map((ns: any) => `- ${ns.namespace}: ${ns.count} memories`).join('\n')
-          : '(no namespace data available)';
+        const nsText =
+          namespaces.length > 0
+            ? namespaces.map((ns: any) => `- ${ns.namespace}: ${ns.count} memories`).join('\n')
+            : '(no namespace data available)';
 
-        const oldMemoriesText = oldestMemories.length > 0
-          ? oldestMemories.slice(0, 10).map((m: any) => formatMemory(m)).join('\n\n')
-          : '(none)';
+        const oldMemoriesText =
+          oldestMemories.length > 0
+            ? oldestMemories
+                .slice(0, 10)
+                .map((m: any) => formatMemory(m))
+                .join('\n\n')
+            : '(none)';
 
         return {
           description: 'Memory store report' + (namespace ? ` for "${namespace}"` : ''),
@@ -191,8 +196,10 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
               role: 'user',
               content: {
                 type: 'text',
-                text: `Generate a health report for my MemoClaw memory store` +
-                  (namespace ? ` (namespace: "${namespace}")` : '') + `.\n\n` +
+                text:
+                  `Generate a health report for my MemoClaw memory store` +
+                  (namespace ? ` (namespace: "${namespace}")` : '') +
+                  `.\n\n` +
                   `## Stats\n\`\`\`json\n${statsText}\n\`\`\`\n\n` +
                   `## Namespaces\n${nsText}\n\n` +
                   `## Oldest Memories (potential stale)\n${oldMemoriesText}\n\n` +
@@ -221,9 +228,11 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
               role: 'user',
               content: {
                 type: 'text',
-                text: `I want to migrate my memory/knowledge from markdown files to MemoClaw.\n\n` +
+                text:
+                  `I want to migrate my memory/knowledge from markdown files to MemoClaw.\n\n` +
                   `**Source:** \`${filePath}\`\n` +
-                  (namespace ? `**Target namespace:** \`${namespace}\`\n` : '') + `\n` +
+                  (namespace ? `**Target namespace:** \`${namespace}\`\n` : '') +
+                  `\n` +
                   `Guide me through the migration process. Here's what I need:\n\n` +
                   `1. **Preview** — What the CLI command will do:\n` +
                   `   \`\`\`bash\n   memoclaw migrate ${filePath}${nsFlag} --dry-run\n   \`\`\`\n\n` +

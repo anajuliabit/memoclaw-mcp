@@ -4,8 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Set env before any imports
-process.env.MEMOCLAW_PRIVATE_KEY =
-  '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
+process.env.MEMOCLAW_PRIVATE_KEY = '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
 process.env.MEMOCLAW_URL = 'https://test.memoclaw.com';
 process.env.MEMOCLAW_TIMEOUT = '5000';
 process.env.MEMOCLAW_MAX_RETRIES = '3';
@@ -93,9 +92,7 @@ describe('API Client', () => {
       const client = createApiClient(config);
       await client.makeRequest('GET', '/v1/memories');
       const [, opts] = fetchSpy.mock.calls[0];
-      expect(opts.headers['x-wallet-auth']).toMatch(
-        /^0x2c7536E3605D9C16a7a3D7b1898e529396a65c23:\d+:0xmocksig$/
-      );
+      expect(opts.headers['x-wallet-auth']).toMatch(/^0x2c7536E3605D9C16a7a3D7b1898e529396a65c23:\d+:0xmocksig$/);
     });
   });
 
@@ -185,7 +182,7 @@ describe('API Client', () => {
         (_url: string, opts: { signal: AbortSignal }) =>
           new Promise((_resolve, reject) => {
             opts.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-          })
+          }),
       );
 
       const client = createApiClient(shortConfig);
