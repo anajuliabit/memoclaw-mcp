@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { handleMemory } from '../src/handlers/memory.js';
 import { handleRecall } from '../src/handlers/recall.js';
 import { handleAdmin } from '../src/handlers/admin.js';

@@ -483,7 +483,11 @@ async function main() {
         }
 
         // Check session creation rate limit (per-IP)
-        const sessionCheck = rateLimiter.check(`session:${clientIp}`, rateLimitConfig.sessionLimit, rateLimitConfig.windowMs);
+        const sessionCheck = rateLimiter.check(
+          `session:${clientIp}`,
+          rateLimitConfig.sessionLimit,
+          rateLimitConfig.windowMs,
+        );
         if (!sessionCheck.allowed) {
           const retryAfter = Math.ceil(sessionCheck.retryAfterMs / 1000);
           res.writeHead(429, {

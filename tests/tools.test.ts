@@ -1223,9 +1223,7 @@ describe('Tool Handlers', () => {
   });
 
   it('graph traverses single level', async () => {
-    let callNum = 0;
     globalThis.fetch = vi.fn().mockImplementation((url: string) => {
-      callNum++;
       if (url.includes('/relations')) {
         return Promise.resolve({
           ok: true,
@@ -1824,7 +1822,7 @@ describe('memoclaw_batch_update', () => {
 
   it('falls back to individual PATCH on 404', async () => {
     let callCount = 0;
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string, opts: any) => {
+    globalThis.fetch = vi.fn().mockImplementation(async (_url: string, _opts: any) => {
       callCount++;
       if (callCount === 1) {
         // First call is batch endpoint - return 404

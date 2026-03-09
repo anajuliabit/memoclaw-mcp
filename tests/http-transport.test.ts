@@ -11,7 +11,7 @@
  * - Bearer token auth when MEMOCLAW_HTTP_TOKEN is set
  * - 404 for unknown paths
  */
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createServer, type Server as HttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
