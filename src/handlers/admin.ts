@@ -8,7 +8,7 @@ import {
   userText,
   memoryResourceLink,
 } from '../format.js';
-import { validateIdentifier, validateId } from '../validate.js';
+import { validateIdentifier, validateId, validatePaginationParam } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   IngestArgs,
@@ -563,6 +563,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
 
     case 'memoclaw_core_memories': {
       const { limit, namespace, agent_id } = args as CoreMemoriesArgs;
+      validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(agent_id, 'agent_id');
       const params = new URLSearchParams();

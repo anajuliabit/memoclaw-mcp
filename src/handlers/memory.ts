@@ -9,7 +9,7 @@ import {
   userText,
   memoryResourceLink,
 } from '../format.js';
-import { validateIdentifier, validateId, validateTags, validateISODate } from '../validate.js';
+import { validateIdentifier, validateId, validateTags, validateISODate, validatePaginationParam } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   StoreArgs,
@@ -169,6 +169,8 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_list': {
       const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after, before } = args as ListArgs;
+      validatePaginationParam(limit, 'limit');
+      validatePaginationParam(offset, 'offset');
       validateTags(tags);
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(memory_type, 'memory_type');

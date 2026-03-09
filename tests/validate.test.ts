@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { validateIdentifier, validateId, validateTags, validateQuery, validateISODate } from '../src/validate.js';
+import {
+  validateIdentifier,
+  validateId,
+  validateTags,
+  validateQuery,
+  validateISODate,
+  validatePaginationParam,
+} from '../src/validate.js';
 
 describe('validateIdentifier', () => {
   it('returns undefined for undefined/null/empty', () => {
@@ -93,6 +100,47 @@ describe('validateQuery', () => {
     expect(() => validateQuery(undefined)).toThrow('required');
     expect(() => validateQuery('')).toThrow('required');
     expect(() => validateQuery('   ')).toThrow('required');
+  });
+});
+
+describe('validatePaginationParam', () => {
+  it('returns undefined for undefined/null', () => {
+    expect(validatePaginationParam(undefined, 'limit')).toBeUndefined();
+    expect(validatePaginationParam(null, 'limit')).toBeUndefined();
+  });
+
+  it('accepts valid non-negative integers', () => {
+    expect(validatePaginationParam(0, 'limit')).toBe(0);
+    expect(validatePaginationParam(10, 'limit')).toBe(10);
+    expect(validatePaginationParam(100, 'offset')).toBe(100);
+  });
+
+  it('rejects non-number values', () => {
+    expect(() => validatePaginationParam('10' as any, 'limit')).toThrow('must be a number');
+    expect(() => validatePaginationParam(true as any, 'limit')).toThrow('must be a number');
+  });
+
+  it('rejects non-integer values', () => {
+    expect(() => validatePaginationParam(10.5, 'limit')).toThrow('must be an integer');
+    expect(() => validatePaginationParam(0.1, 'offset')).toThrow('must be an integer');
+  });
+
+  it('rejects negative values', () => {
+    expect(() => validatePaginationParam(-1, 'limit')).toThrow('must be non-negative');
+    expect(() => validatePaginationParam(-100, 'offset')).toThrow('must be non-negative');
+  });
+
+  it('rejects values exceeding default max for limit (1000)', () => {
+    expect(() => validatePaginationParam(1001, 'limit')).toThrow('exceeds maximum of 1000');
+  });
+
+  it('rejects values exceeding default max for offset (100000)', () => {
+    expect(() => validatePaginationParam(100001, 'offset')).toThrow('exceeds maximum of 100000');
+  });
+
+  it('respects custom max', () => {
+    expect(validatePaginationParam(50, 'limit', 50)).toBe(50);
+    expect(() => validatePaginationParam(51, 'limit', 50)).toThrow('exceeds maximum of 50');
   });
 });
 
