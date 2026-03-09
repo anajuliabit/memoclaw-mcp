@@ -1,5 +1,5 @@
 import { formatMemory, userAndAssistantText, assistantText, userText } from '../format.js';
-import { validateIdentifier, validateTags, validateQuery, validateISODate } from '../validate.js';
+import { validateIdentifier, validateTags, validateQuery, validateISODate, validatePaginationParam } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
 
@@ -22,6 +22,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         before,
       } = args as RecallArgs;
       validateQuery(query);
+      validatePaginationParam(limit, 'limit');
       validateTags(tags);
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(memory_type, 'memory_type');
@@ -64,6 +65,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     case 'memoclaw_search': {
       const { query, limit, namespace, tags, memory_type, session_id, agent_id, after, before } = args as SearchArgs;
       validateQuery(query);
+      validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
       validateTags(tags);
       validateIdentifier(memory_type, 'memory_type');
@@ -102,6 +104,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     case 'memoclaw_context': {
       const { query, limit, namespace, session_id, agent_id } = args as ContextArgs;
       validateQuery(query);
+      validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
@@ -130,6 +133,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
 
     case 'memoclaw_suggested': {
       const { limit, namespace, session_id, agent_id, category } = args as SuggestedArgs;
+      validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');

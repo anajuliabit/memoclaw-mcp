@@ -83,6 +83,39 @@ export function validateQuery(value: unknown, label = 'query'): string {
   return value;
 }
 
+/** Default upper bound for limit parameters */
+const DEFAULT_MAX_LIMIT = 1000;
+
+/** Default upper bound for offset parameters */
+const DEFAULT_MAX_OFFSET = 100000;
+
+/**
+ * Validate a pagination parameter (limit or offset).
+ * Must be a non-negative integer within bounds.
+ * Returns undefined if value is falsy (optional params), throws on invalid.
+ */
+export function validatePaginationParam(
+  value: unknown,
+  label: string,
+  max?: number,
+): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number') {
+    throw new Error(`${label} must be a number`);
+  }
+  if (!Number.isInteger(value)) {
+    throw new Error(`${label} must be an integer (got ${value})`);
+  }
+  if (value < 0) {
+    throw new Error(`${label} must be non-negative (got ${value})`);
+  }
+  const upperBound = max ?? (label.toLowerCase().includes('offset') ? DEFAULT_MAX_OFFSET : DEFAULT_MAX_LIMIT);
+  if (value > upperBound) {
+    throw new Error(`${label} exceeds maximum of ${upperBound} (got ${value})`);
+  }
+  return value;
+}
+
 /**
  * Validate an ISO 8601 date string parameter (expires_at, after, before).
  * Returns undefined if value is falsy (optional params), throws on invalid.

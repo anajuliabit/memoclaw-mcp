@@ -185,12 +185,71 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     mcpLogger.error('tool', { event: 'error', tool: name, error: msg });
+    const errorCode = classifyError(error);
     return {
       content: [{ type: 'text', text: `Error: ${msg}`, annotations: { audience: ['user'], priority: 1.0 } }],
       isError: true,
+      structuredContent: {
+        error_code: errorCode,
+        message: msg,
+      },
     };
   }
 });
+
+/** Error codes for structured error responses (MCP 2025-06-18). */
+type ErrorCode = 'VALIDATION_ERROR' | 'API_ERROR' | 'TIMEOUT' | 'RATE_LIMITED' | 'PAYMENT_REQUIRED' | 'CANCELLED' | 'UNKNOWN';
+
+/**
+ * Classify an error into a structured error code.
+ * Inspects the error message and known error types to determine the category.
+ */
+function classifyError(error: unknown): ErrorCode {
+  if (!error) return 'UNKNOWN';
+
+  const name = error instanceof Error ? error.name : '';
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+
+  // Cancellation (from MCP notifications/cancelled)
+  if (name === 'CancellationError' || msg.includes('cancelled') || msg.includes('aborted')) {
+    return 'CANCELLED';
+  }
+
+  // Validation errors (client-side input validation)
+  if (
+    msg.includes('is required') ||
+    msg.includes('must be') ||
+    msg.includes('cannot be empty') ||
+    msg.includes('invalid characters') ||
+    msg.includes('exceeds') ||
+    msg.includes('not a valid') ||
+    msg.includes('no valid update fields')
+  ) {
+    return 'VALIDATION_ERROR';
+  }
+
+  // Rate limiting
+  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many requests')) {
+    return 'RATE_LIMITED';
+  }
+
+  // Payment required (x402)
+  if (msg.includes('402') || msg.includes('payment required') || msg.includes('x402')) {
+    return 'PAYMENT_REQUIRED';
+  }
+
+  // Timeout
+  if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('etimedout') || msg.includes('econnaborted')) {
+    return 'TIMEOUT';
+  }
+
+  // HTTP/API errors
+  if (msg.includes('http') || msg.includes('status') || /\b[45]\d{2}\b/.test(msg)) {
+    return 'API_ERROR';
+  }
+
+  return 'UNKNOWN';
+}
 
 /**
  * Determine transport mode from CLI args and env vars.
