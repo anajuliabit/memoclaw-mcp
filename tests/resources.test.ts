@@ -3,8 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-process.env.MEMOCLAW_PRIVATE_KEY =
-  '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
+process.env.MEMOCLAW_PRIVATE_KEY = '0x4c0883a69102937d6231471b5dbb6204fe512961708279f15a8f7e20b4e3b1fb';
 process.env.MEMOCLAW_URL = 'https://test.memoclaw.com';
 process.env.MEMOCLAW_TIMEOUT = '5000';
 process.env.MEMOCLAW_MAX_RETRIES = '0';
@@ -113,9 +112,7 @@ describe('Resources', () => {
   describe('memoclaw://core-memories', () => {
     it('should return core memories', async () => {
       const coreData = {
-        memories: [
-          { id: '1', content: 'Important thing', importance: 1.0, pinned: true },
-        ],
+        memories: [{ id: '1', content: 'Important thing', importance: 1.0, pinned: true }],
       };
       mockApiResponse(coreData);
 
@@ -187,9 +184,7 @@ describe('Resources', () => {
   describe('memoclaw://tags/{tag} (template)', () => {
     it('should return memories with a specific tag', async () => {
       const data = {
-        memories: [
-          { id: '1', content: 'Tagged memory', tags: ['frontend'] },
-        ],
+        memories: [{ id: '1', content: 'Tagged memory', tags: ['frontend'] }],
       };
       mockApiResponse(data);
 
@@ -204,9 +199,7 @@ describe('Resources', () => {
 
   describe('unknown resource', () => {
     it('should throw for unknown URI', async () => {
-      await expect(handleReadResource('memoclaw://unknown')).rejects.toThrow(
-        'Unknown resource'
-      );
+      await expect(handleReadResource('memoclaw://unknown')).rejects.toThrow('Unknown resource');
     });
   });
 });

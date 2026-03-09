@@ -13,7 +13,14 @@ import type { HandlerContext } from '../src/handlers/types.js';
 function createMockContext(mockResponse: any = {}): HandlerContext {
   return {
     api: {} as any,
-    config: { apiUrl: 'https://api.memoclaw.com', privateKey: '0x1234', configSource: 'env', timeout: 30000, maxRetries: 3, allowedOrigins: 'any' } as any,
+    config: {
+      apiUrl: 'https://api.memoclaw.com',
+      privateKey: '0x1234',
+      configSource: 'env',
+      timeout: 30000,
+      maxRetries: 3,
+      allowedOrigins: 'any',
+    } as any,
     makeRequest: async () => mockResponse,
     account: { address: '0xTestWallet' } as any,
   };
@@ -149,7 +156,9 @@ describe('Content Annotations', () => {
     it('memoclaw_create_relation returns annotated content', async () => {
       const ctx = createMockContext({ id: 'r1' });
       const result = await handleRelations(ctx, 'memoclaw_create_relation', {
-        memory_id: 'm1', target_id: 'm2', relation_type: 'related_to',
+        memory_id: 'm1',
+        target_id: 'm2',
+        relation_type: 'related_to',
       });
       expect(result!.content.length).toBe(2);
       expect(result!.content[0].annotations?.audience).toContain('user');

@@ -36,13 +36,20 @@ export function formatMemory(m: any): string {
  * If an AbortSignal is provided and aborted, remaining tasks are skipped
  * and the returned array will contain results only for tasks that started.
  */
-export async function withConcurrency<T>(tasks: (() => Promise<T>)[], limit: number, signal?: AbortSignal): Promise<PromiseSettledResult<T>[]> {
+export async function withConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+  signal?: AbortSignal,
+): Promise<PromiseSettledResult<T>[]> {
   const results: PromiseSettledResult<T>[] = new Array(tasks.length);
   let idx = 0;
   let cancelled = false;
   async function worker() {
     while (idx < tasks.length) {
-      if (signal?.aborted) { cancelled = true; return; }
+      if (signal?.aborted) {
+        cancelled = true;
+        return;
+      }
       const i = idx++;
       try {
         results[i] = { status: 'fulfilled', value: await tasks[i]() };
@@ -80,7 +87,7 @@ export function validateContentLength(content: string, label = 'content'): void 
   if (content.length > MAX_CONTENT_LENGTH) {
     throw new Error(
       `${label} exceeds the ${MAX_CONTENT_LENGTH} character limit (got ${content.length} chars). ` +
-      `Split the content into smaller memories or summarize it.`
+        `Split the content into smaller memories or summarize it.`,
     );
   }
 }
@@ -124,9 +131,17 @@ export function errorText(text: string): TextContentItem {
 
 /** Allowed fields for the update endpoint */
 export const UPDATE_FIELDS = new Set([
-  'content', 'importance', 'memory_type', 'namespace',
-  'metadata', 'expires_at', 'pinned', 'tags', 'immutable',
-  'session_id', 'agent_id',
+  'content',
+  'importance',
+  'memory_type',
+  'namespace',
+  'metadata',
+  'expires_at',
+  'pinned',
+  'tags',
+  'immutable',
+  'session_id',
+  'agent_id',
 ]);
 
 // ---------------------------------------------------------------------------

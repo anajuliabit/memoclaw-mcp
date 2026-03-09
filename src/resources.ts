@@ -28,8 +28,7 @@ export const RESOURCES = [
   {
     uri: 'memoclaw://namespaces',
     name: 'Namespaces',
-    description:
-      'All namespaces that contain memories, with per-namespace counts. FREE — no API credits used.',
+    description: 'All namespaces that contain memories, with per-namespace counts. FREE — no API credits used.',
     mimeType: 'application/json',
   },
   {
@@ -202,7 +201,10 @@ export function createResourceHandler(api: ApiClient, _config: Config) {
         }
 
         case 'tags': {
-          const result = await makeRequest('GET', `/v1/memories?tags=${encodeURIComponent(parsed.params.tag)}&limit=50`);
+          const result = await makeRequest(
+            'GET',
+            `/v1/memories?tags=${encodeURIComponent(parsed.params.tag)}&limit=50`,
+          );
           const memories = result.memories || result.data || [];
           return {
             contents: [

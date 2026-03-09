@@ -42,9 +42,7 @@ export function loadConfig(): Config {
   if (!apiUrl) apiUrl = 'https://api.memoclaw.com';
 
   if (!privateKey) {
-    console.error(
-      'MemoClaw: No private key found. Set MEMOCLAW_PRIVATE_KEY env var or run `memoclaw init`.'
-    );
+    console.error('MemoClaw: No private key found. Set MEMOCLAW_PRIVATE_KEY env var or run `memoclaw init`.');
     process.exit(1);
   }
 

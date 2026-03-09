@@ -170,7 +170,9 @@ describe('Handler edge cases', () => {
     });
 
     it('rejects invalid importance', async () => {
-      await expect(handler('memoclaw_store', { content: 'test', importance: 2 })).rejects.toThrow(/between 0.0 and 1.0/);
+      await expect(handler('memoclaw_store', { content: 'test', importance: 2 })).rejects.toThrow(
+        /between 0.0 and 1.0/,
+      );
     });
 
     it('passes all optional fields to API', async () => {
@@ -247,7 +249,9 @@ describe('Handler edge cases', () => {
     });
 
     it('rejects when no valid update fields provided', async () => {
-      await expect(handler('memoclaw_update', { id: 'abc', unknown_field: 'val' })).rejects.toThrow(/No valid update fields/);
+      await expect(handler('memoclaw_update', { id: 'abc', unknown_field: 'val' })).rejects.toThrow(
+        /No valid update fields/,
+      );
     });
   });
 
@@ -262,9 +266,11 @@ describe('Handler edge cases', () => {
     });
 
     it('rejects memory with empty content', async () => {
-      await expect(handler('memoclaw_bulk_store', {
-        memories: [{ content: 'ok' }, { content: '' }],
-      })).rejects.toThrow(/index 1.*empty content/);
+      await expect(
+        handler('memoclaw_bulk_store', {
+          memories: [{ content: 'ok' }, { content: '' }],
+        }),
+      ).rejects.toThrow(/index 1.*empty content/);
     });
 
     it('tries batch endpoint first', async () => {
@@ -294,9 +300,11 @@ describe('Handler edge cases', () => {
     });
 
     it('rejects memory with empty content at specific index', async () => {
-      await expect(handler('memoclaw_import', {
-        memories: [{ content: 'ok' }, { content: '   ' }],
-      })).rejects.toThrow(/index 1.*empty content/);
+      await expect(
+        handler('memoclaw_import', {
+          memories: [{ content: 'ok' }, { content: '   ' }],
+        }),
+      ).rejects.toThrow(/index 1.*empty content/);
     });
   });
 
@@ -333,9 +341,11 @@ describe('Handler edge cases', () => {
     });
 
     it('rejects update missing id', async () => {
-      await expect(handler('memoclaw_batch_update', {
-        updates: [{ content: 'new' }],
-      })).rejects.toThrow(/missing "id"/);
+      await expect(
+        handler('memoclaw_batch_update', {
+          updates: [{ content: 'new' }],
+        }),
+      ).rejects.toThrow(/missing "id"/);
     });
   });
 

@@ -29,8 +29,7 @@ describe('handleRecall', () => {
 
     it('rejects empty query', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRecall(ctx, 'memoclaw_recall', { query: '' }))
-        .rejects.toThrow('query is required');
+      await expect(handleRecall(ctx, 'memoclaw_recall', { query: '' })).rejects.toThrow('query is required');
     });
 
     it('passes filters to API', async () => {
@@ -38,8 +37,12 @@ describe('handleRecall', () => {
         'POST /v1/recall': { memories: [] },
       });
       await handleRecall(ctx, 'memoclaw_recall', {
-        query: 'test', tags: ['a'], memory_type: 'fact', namespace: 'ns',
-        limit: 5, min_similarity: 0.8,
+        query: 'test',
+        tags: ['a'],
+        memory_type: 'fact',
+        namespace: 'ns',
+        limit: 5,
+        min_similarity: 0.8,
       });
       const body = api.makeRequest.mock.calls[0][2];
       expect(body.filters.tags).toEqual(['a']);
@@ -53,7 +56,8 @@ describe('handleRecall', () => {
         'POST /v1/recall': { memories: [] },
       });
       await handleRecall(ctx, 'memoclaw_recall', {
-        query: 'test', before: '2025-06-01T00:00:00Z',
+        query: 'test',
+        before: '2025-06-01T00:00:00Z',
       });
       const body = api.makeRequest.mock.calls[0][2];
       expect(body.filters.before).toBe('2025-06-01T00:00:00Z');
@@ -64,7 +68,9 @@ describe('handleRecall', () => {
         'POST /v1/recall': { memories: [] },
       });
       await handleRecall(ctx, 'memoclaw_recall', {
-        query: 'test', after: '2025-01-01T00:00:00Z', before: '2025-06-01T00:00:00Z',
+        query: 'test',
+        after: '2025-01-01T00:00:00Z',
+        before: '2025-06-01T00:00:00Z',
       });
       const body = api.makeRequest.mock.calls[0][2];
       expect(body.filters.after).toBe('2025-01-01T00:00:00Z');
@@ -83,8 +89,7 @@ describe('handleRecall', () => {
 
     it('rejects empty query', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRecall(ctx, 'memoclaw_search', { query: '  ' }))
-        .rejects.toThrow('query is required');
+      await expect(handleRecall(ctx, 'memoclaw_search', { query: '  ' })).rejects.toThrow('query is required');
     });
 
     it('passes before filter as query param', async () => {
@@ -142,14 +147,16 @@ describe('handleRecall', () => {
 
     it('validates namespace identifier', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRecall(ctx, 'memoclaw_suggested', { namespace: 'bad namespace!' }))
-        .rejects.toThrow('namespace contains invalid characters');
+      await expect(handleRecall(ctx, 'memoclaw_suggested', { namespace: 'bad namespace!' })).rejects.toThrow(
+        'namespace contains invalid characters',
+      );
     });
 
     it('validates category identifier', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRecall(ctx, 'memoclaw_suggested', { category: 'bad cat!' }))
-        .rejects.toThrow('category contains invalid characters');
+      await expect(handleRecall(ctx, 'memoclaw_suggested', { category: 'bad cat!' })).rejects.toThrow(
+        'category contains invalid characters',
+      );
     });
   });
 
@@ -204,7 +211,9 @@ describe('handleRecall', () => {
         'POST /v1/recall': { memories: [] },
       });
       await handleRecall(ctx, 'memoclaw_check_duplicates', {
-        content: 'test', min_similarity: 0.5, namespace: 'work',
+        content: 'test',
+        min_similarity: 0.5,
+        namespace: 'work',
       });
       const body = api.makeRequest.mock.calls[0][2];
       expect(body.min_similarity).toBe(0.5);
@@ -213,8 +222,9 @@ describe('handleRecall', () => {
 
     it('rejects empty content', async () => {
       const { ctx } = makeCtx();
-      await expect(handleRecall(ctx, 'memoclaw_check_duplicates', { content: '' }))
-        .rejects.toThrow('content is required');
+      await expect(handleRecall(ctx, 'memoclaw_check_duplicates', { content: '' })).rejects.toThrow(
+        'content is required',
+      );
     });
   });
 
