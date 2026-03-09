@@ -66,6 +66,8 @@ Environment variables:
   MEMOCLAW_SESSION_TTL_MS Session idle TTL in ms (default: 1800000)
   MEMOCLAW_ALLOWED_ORIGINS Comma-separated allowed origins for HTTP transport
                            (default: localhost only; set to * to allow all)
+  MEMOCLAW_MAX_BODY_SIZE  Max request body size in bytes (default: 1048576 = 1MB)
+                           Requests exceeding this limit receive 413 Payload Too Large
 
 More info: https://docs.memoclaw.com`);
   process.exit(0);
@@ -275,6 +277,59 @@ async function main() {
     const allowedOrigins = getAllowedOrigins();
 
     /**
+     * Max request body size in bytes (default 1MB, configurable via MEMOCLAW_MAX_BODY_SIZE).
+     * Requests exceeding this limit are rejected with 413 Payload Too Large.
+     */
+    const MAX_BODY_SIZE = parseInt(process.env.MEMOCLAW_MAX_BODY_SIZE || '', 10) || 1048576;
+
+    /**
+     * Check Content-Length header upfront and enforce body size limit while streaming.
+     * Returns true if the request was rejected (caller should return early).
+     */
+    function checkBodySize(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): boolean {
+      const contentLength = req.headers['content-length'];
+      if (contentLength) {
+        const len = parseInt(contentLength, 10);
+        if (!isNaN(len) && len > MAX_BODY_SIZE) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
+          }));
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /**
+     * Enforce body size limit on streaming request bodies (for chunked transfers
+     * or when Content-Length is missing/understated). Wraps the request handler
+     * and destroys the socket if the limit is exceeded mid-stream.
+     */
+    function enforceBodyLimit(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): void {
+      let received = 0;
+      const originalEmit = req.emit.bind(req);
+      req.emit = function (event: string, ...args: any[]) {
+        if (event === 'data') {
+          const chunk = args[0] as Buffer;
+          received += chunk.length;
+          if (received > MAX_BODY_SIZE) {
+            // Stop processing — reject with 413
+            req.destroy();
+            if (!res.headersSent) {
+              res.writeHead(413, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
+              }));
+            }
+            return false;
+          }
+        }
+        return originalEmit(event, ...args);
+      } as any;
+    }
+
+    /**
      * Check if the Origin header is allowed.
      * Requests without an Origin header are allowed (non-browser clients, stdio proxies).
      * Requests WITH an Origin must match the allowlist to prevent DNS rebinding.
@@ -348,6 +403,12 @@ async function main() {
 
       // MCP endpoint
       if (url.pathname === '/mcp') {
+        // Enforce request body size limit for POST requests (prevents DoS via large payloads)
+        if (req.method === 'POST') {
+          if (checkBodySize(req, res)) return;
+          enforceBodyLimit(req, res);
+        }
+
         // Extract session ID from header for existing sessions
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
