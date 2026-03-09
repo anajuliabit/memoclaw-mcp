@@ -303,30 +303,24 @@ async function main() {
 
     /**
      * Enforce body size limit on streaming request bodies (for chunked transfers
-     * or when Content-Length is missing/understated). Wraps the request handler
-     * and destroys the socket if the limit is exceeded mid-stream.
+     * or when Content-Length is missing/understated). Uses a standard 'data'
+     * event listener to track incoming bytes and destroys the request if the
+     * limit is exceeded.
      */
     function enforceBodyLimit(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): void {
       let received = 0;
-      const originalEmit = req.emit.bind(req);
-      req.emit = function (event: string, ...args: any[]) {
-        if (event === 'data') {
-          const chunk = args[0] as Buffer;
-          received += chunk.length;
-          if (received > MAX_BODY_SIZE) {
-            // Stop processing — reject with 413
-            req.destroy();
-            if (!res.headersSent) {
-              res.writeHead(413, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({
-                error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
-              }));
-            }
-            return false;
+      req.on('data', (chunk: Buffer) => {
+        received += chunk.length;
+        if (received > MAX_BODY_SIZE) {
+          req.destroy();
+          if (!res.headersSent) {
+            res.writeHead(413, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: `Request body too large. Maximum allowed size is ${MAX_BODY_SIZE} bytes.`,
+            }));
           }
         }
-        return originalEmit(event, ...args);
-      } as any;
+      });
     }
 
     /**
