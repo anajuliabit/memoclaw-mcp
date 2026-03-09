@@ -607,6 +607,7 @@ async function main() {
     _httpServer = httpServer;
     _cleanupHttp = () => {
       clearInterval(sweepInterval);
+      rateLimiter.dispose();
       for (const [, transport] of sessions) {
         try {
           transport.close?.();

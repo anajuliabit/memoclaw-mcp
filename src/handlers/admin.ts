@@ -8,7 +8,7 @@ import {
   userText,
   memoryResourceLink,
 } from '../format.js';
-import { validateIdentifier, validateId, validatePaginationParam } from '../validate.js';
+import { validateIdentifier, validateId, validatePaginationParam, validateSimilarity } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   IngestArgs,
@@ -127,6 +127,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
       const { namespace, min_similarity, mode, dry_run, agent_id } = args as ConsolidateArgs;
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(agent_id, 'agent_id');
+      validateSimilarity(min_similarity);
       const body: any = {};
       if (namespace) body.namespace = namespace;
       if (agent_id) body.agent_id = agent_id;

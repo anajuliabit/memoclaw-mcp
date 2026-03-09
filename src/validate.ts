@@ -113,6 +113,22 @@ export function validatePaginationParam(value: unknown, label: string, max?: num
 }
 
 /**
+ * Validate a similarity threshold parameter.
+ * Must be a number between 0 and 1 (inclusive).
+ * Returns undefined if value is falsy (optional params), throws on invalid.
+ */
+export function validateSimilarity(value: unknown, label = 'min_similarity'): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    throw new Error(`${label} must be a number between 0.0 and 1.0`);
+  }
+  if (value < 0 || value > 1) {
+    throw new Error(`${label} must be between 0.0 and 1.0 (got ${value})`);
+  }
+  return value;
+}
+
+/**
  * Validate an ISO 8601 date string parameter (expires_at, after, before).
  * Returns undefined if value is falsy (optional params), throws on invalid.
  * Accepts any string that `new Date()` can parse to a valid date.
