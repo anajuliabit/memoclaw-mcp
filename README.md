@@ -74,6 +74,19 @@ The server exposes:
 
 Configure your MCP client to connect to `http://localhost:3100/mcp`.
 
+### Rate Limiting
+
+The HTTP transport includes built-in rate limiting to prevent abuse:
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `MEMOCLAW_RATE_LIMIT` | `60` | Max requests per IP per window |
+| `MEMOCLAW_GLOBAL_RATE_LIMIT` | `200` | Max total requests per window |
+| `MEMOCLAW_SESSION_RATE_LIMIT` | `10` | Max new sessions per IP per window |
+| `MEMOCLAW_RATE_LIMIT_WINDOW_MS` | `60000` | Window duration in ms (1 minute) |
+
+Set any limit to `0` to disable it. Rate-limited requests receive a `429 Too Many Requests` response with a `Retry-After` header.
+
 ## Tools
 
 ### Core
