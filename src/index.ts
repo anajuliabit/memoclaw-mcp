@@ -218,6 +218,10 @@ function getHttpPort(): number {
   return 3100;
 }
 
+// Module-level refs for graceful shutdown in HTTP mode
+let _httpServer: import('node:http').Server | null = null;
+let _cleanupHttp: (() => void) | null = null;
+
 // Start server
 async function main() {
   const mode = getTransportMode();
@@ -528,6 +532,21 @@ async function main() {
       res.end(JSON.stringify({ error: 'Not found. Use /mcp for MCP protocol or /health for status.' }));
     });
 
+    // Expose for graceful shutdown
+    _httpServer = httpServer;
+    _cleanupHttp = () => {
+      clearInterval(sweepInterval);
+      for (const [, transport] of sessions) {
+        try {
+          transport.close?.();
+        } catch {
+          /* ignore */
+        }
+      }
+      sessions.clear();
+      sessionActivity.clear();
+    };
+
     httpServer.listen(port, () => {
       console.error(`MemoClaw MCP server running on http://localhost:${port}/mcp (Streamable HTTP)`);
     });
@@ -543,9 +562,12 @@ main().catch(console.error);
 // Graceful shutdown
 function shutdown() {
   console.error('MemoClaw MCP server shutting down...');
+  // Clean up HTTP sessions, sweep interval, and stop accepting connections
+  _cleanupHttp?.();
+  _httpServer?.close();
   server.close().catch(() => {});
   // Give transports time to flush, then exit
-  setTimeout(() => process.exit(0), 500);
+  setTimeout(() => process.exit(0), 1000);
 }
 
 process.on('SIGINT', shutdown);
