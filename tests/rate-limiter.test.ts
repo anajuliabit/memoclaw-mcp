@@ -167,7 +167,6 @@ function buildRateLimitedHandler(
   const limiter = new RateLimiter();
   const sessions = new Map<string, boolean>();
 
-
   return {
     limiter,
     handler: (req: IncomingMessage, res: ServerResponse) => {
