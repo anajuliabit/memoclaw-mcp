@@ -67,6 +67,11 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       const { memory_id, depth: rawDepth, relation_type } = args as GraphArgs;
       validateId(memory_id, 'memory_id');
       if (relation_type) validateIdentifier(relation_type, 'relation_type');
+      if (rawDepth !== undefined && rawDepth !== null) {
+        if (typeof rawDepth !== 'number' || !Number.isInteger(rawDepth) || rawDepth < 1) {
+          throw new Error('depth must be a positive integer (1-3)');
+        }
+      }
       const depth = Math.min(Math.max(rawDepth || 1, 1), 3);
       const visited = new Set<string>();
       const nodes: any[] = [];

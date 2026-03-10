@@ -100,6 +100,27 @@ describe('handleRelations', () => {
       await expect(handleRelations(ctx, 'memoclaw_graph', {})).rejects.toThrow('memory_id is required');
     });
 
+    it('rejects non-integer depth', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRelations(ctx, 'memoclaw_graph', { memory_id: 'm1', depth: 2.5 })).rejects.toThrow(
+        'depth must be a positive integer',
+      );
+    });
+
+    it('rejects zero depth', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRelations(ctx, 'memoclaw_graph', { memory_id: 'm1', depth: 0 })).rejects.toThrow(
+        'depth must be a positive integer',
+      );
+    });
+
+    it('rejects negative depth', async () => {
+      const { ctx } = makeCtx();
+      await expect(handleRelations(ctx, 'memoclaw_graph', { memory_id: 'm1', depth: -1 })).rejects.toThrow(
+        'depth must be a positive integer',
+      );
+    });
+
     it('clamps depth to 1-3', async () => {
       const { ctx } = makeCtx({
         'GET /v1/memories/': (path: string) => {
