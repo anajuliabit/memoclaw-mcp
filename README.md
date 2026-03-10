@@ -84,6 +84,7 @@ The HTTP transport includes built-in rate limiting to prevent abuse:
 | `MEMOCLAW_GLOBAL_RATE_LIMIT` | `200` | Max total requests per window |
 | `MEMOCLAW_SESSION_RATE_LIMIT` | `10` | Max new sessions per IP per window |
 | `MEMOCLAW_RATE_LIMIT_WINDOW_MS` | `60000` | Window duration in ms (1 minute) |
+| `MEMOCLAW_TRUST_PROXY` | `false` | Trust `X-Forwarded-For` header for client IP (set to `true` or `1` when behind a reverse proxy) |
 
 Set any limit to `0` to disable it. Rate-limited requests receive a `429 Too Many Requests` response with a `Retry-After` header.
 
