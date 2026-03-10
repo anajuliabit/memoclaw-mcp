@@ -33,6 +33,7 @@ export interface RecallArgs {
   include_relations?: boolean;
   after?: string;
   before?: string;
+  pinned?: boolean;
 }
 
 export interface SearchArgs {

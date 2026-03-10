@@ -76,6 +76,33 @@ describe('handleRecall', () => {
       expect(body.filters.after).toBe('2025-01-01T00:00:00Z');
       expect(body.filters.before).toBe('2025-06-01T00:00:00Z');
     });
+
+    it('passes pinned filter to API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [{ id: '1', content: 'pinned', pinned: true }] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', { query: 'test', pinned: true });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters.pinned).toBe(true);
+    });
+
+    it('passes pinned=false filter to API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', { query: 'test', pinned: false });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters.pinned).toBe(false);
+    });
+
+    it('omits pinned from filters when not specified', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', { query: 'test' });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters).toBeUndefined();
+    });
   });
 
   describe('memoclaw_search', () => {

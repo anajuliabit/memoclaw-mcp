@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.1] - 2026-03-10
+
+### Fixed
+- `memoclaw_recall` now passes the `pinned` filter to the API — previously the parameter was advertised in the tool schema (via COMMON_FILTERS) but silently ignored by the handler
+- Added `pinned` field to `RecallArgs` type definition
+
+### Added
+- Autocomplete completions for `format` argument (memoclaw_export: json, jsonl) and `strategy` argument (memoclaw_merge: keep_target, keep_source, combine)
+- 7 new tests covering recall pinned filter and new completions
+
 ## [1.17.0] - 2026-03-08
 
 ### Added
