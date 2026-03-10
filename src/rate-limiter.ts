@@ -87,13 +87,28 @@ function parseEnvInt(envVar: string, defaultVal: number): number {
 }
 
 /**
- * Extract client IP from request, respecting X-Forwarded-For if present.
+ * Whether the server trusts proxy headers (X-Forwarded-For).
+ * Controlled by the MEMOCLAW_TRUST_PROXY env var (default: false).
+ * Only enable this when running behind a trusted reverse proxy.
+ */
+export function trustProxy(): boolean {
+  const val = process.env.MEMOCLAW_TRUST_PROXY;
+  return val === '1' || val === 'true';
+}
+
+/**
+ * Extract client IP from request.
+ * Only reads X-Forwarded-For when MEMOCLAW_TRUST_PROXY is enabled.
+ * Without trust proxy, always uses the socket remote address to prevent
+ * header spoofing attacks that could bypass rate limits.
  */
 export function getClientIp(req: import('node:http').IncomingMessage): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
+  if (trustProxy()) {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string') {
+      const first = forwarded.split(',')[0]?.trim();
+      if (first) return first;
+    }
   }
   return req.socket.remoteAddress || 'unknown';
 }

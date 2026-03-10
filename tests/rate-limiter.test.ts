@@ -2,7 +2,7 @@
  * Tests for the RateLimiter class and HTTP rate limiting integration.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RateLimiter } from '../src/rate-limiter.js';
+import { RateLimiter, getClientIp, trustProxy } from '../src/rate-limiter.js';
 import { createServer, type Server as HttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
 describe('RateLimiter', () => {
@@ -81,6 +81,73 @@ describe('RateLimiter', () => {
   });
 });
 
+describe('trustProxy', () => {
+  afterEach(() => {
+    delete process.env.MEMOCLAW_TRUST_PROXY;
+  });
+
+  it('returns false when env var is not set', () => {
+    delete process.env.MEMOCLAW_TRUST_PROXY;
+    expect(trustProxy()).toBe(false);
+  });
+
+  it('returns true when set to "true"', () => {
+    process.env.MEMOCLAW_TRUST_PROXY = 'true';
+    expect(trustProxy()).toBe(true);
+  });
+
+  it('returns true when set to "1"', () => {
+    process.env.MEMOCLAW_TRUST_PROXY = '1';
+    expect(trustProxy()).toBe(true);
+  });
+
+  it('returns false for other values', () => {
+    process.env.MEMOCLAW_TRUST_PROXY = 'yes';
+    expect(trustProxy()).toBe(false);
+    process.env.MEMOCLAW_TRUST_PROXY = '0';
+    expect(trustProxy()).toBe(false);
+    process.env.MEMOCLAW_TRUST_PROXY = 'false';
+    expect(trustProxy()).toBe(false);
+  });
+});
+
+describe('getClientIp', () => {
+  function mockReq(headers: Record<string, string | undefined>, remoteAddress?: string) {
+    return {
+      headers,
+      socket: { remoteAddress: remoteAddress || '127.0.0.1' },
+    } as unknown as import('node:http').IncomingMessage;
+  }
+
+  afterEach(() => {
+    delete process.env.MEMOCLAW_TRUST_PROXY;
+  });
+
+  it('returns socket address when trust proxy is disabled', () => {
+    delete process.env.MEMOCLAW_TRUST_PROXY;
+    const req = mockReq({ 'x-forwarded-for': '10.0.0.1' }, '192.168.1.1');
+    expect(getClientIp(req)).toBe('192.168.1.1');
+  });
+
+  it('returns X-Forwarded-For first IP when trust proxy is enabled', () => {
+    process.env.MEMOCLAW_TRUST_PROXY = 'true';
+    const req = mockReq({ 'x-forwarded-for': '10.0.0.1, 10.0.0.2' }, '192.168.1.1');
+    expect(getClientIp(req)).toBe('10.0.0.1');
+  });
+
+  it('falls back to socket address when XFF is missing even with trust proxy', () => {
+    process.env.MEMOCLAW_TRUST_PROXY = 'true';
+    const req = mockReq({}, '192.168.1.1');
+    expect(getClientIp(req)).toBe('192.168.1.1');
+  });
+
+  it('returns "unknown" when no IP available', () => {
+    delete process.env.MEMOCLAW_TRUST_PROXY;
+    const req = { headers: {}, socket: {} } as unknown as import('node:http').IncomingMessage;
+    expect(getClientIp(req)).toBe('unknown');
+  });
+});
+
 // --- HTTP integration tests ---
 
 function buildRateLimitedHandler(
@@ -100,14 +167,6 @@ function buildRateLimitedHandler(
   const limiter = new RateLimiter();
   const sessions = new Map<string, boolean>();
 
-  function getClientIp(req: IncomingMessage): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string') {
-      const first = forwarded.split(',')[0]?.trim();
-      if (first) return first;
-    }
-    return req.socket.remoteAddress || 'unknown';
-  }
 
   return {
     limiter,
@@ -302,7 +361,47 @@ describe('HTTP Rate Limiting Integration', () => {
     expect(body.error).toContain('global limit');
   });
 
-  it('respects X-Forwarded-For for IP identification', async () => {
+  it('ignores X-Forwarded-For when MEMOCLAW_TRUST_PROXY is not set', async () => {
+    // Without trust proxy, all requests from the same socket IP should share rate limits
+    // regardless of X-Forwarded-For header values
+    delete process.env.MEMOCLAW_TRUST_PROXY;
+
+    for (let i = 0; i < 3; i++) {
+      await fetch(`http://localhost:${port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': `10.0.0.${i}`,
+          'Mcp-Session-Id': 'existing',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'test', id: 1 }),
+      });
+    }
+
+    // Even with a different X-Forwarded-For, should be rate limited (same socket IP)
+    const blocked = await fetch(`http://localhost:${port}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': '99.99.99.99',
+        'Mcp-Session-Id': 'existing',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'test', id: 1 }),
+    });
+    expect(blocked.status).toBe(429);
+  });
+
+  it('respects X-Forwarded-For when MEMOCLAW_TRUST_PROXY is enabled', async () => {
+    // Recreate with trust proxy enabled
+    ctx.limiter.dispose();
+    await stopServer(server);
+    process.env.MEMOCLAW_TRUST_PROXY = 'true';
+
+    ctx = buildRateLimitedHandler({ perIpLimit: 3, globalLimit: 100, sessionLimit: 100 });
+    const result = await startServer(ctx.handler);
+    server = result.server;
+    port = result.port;
+
     // Exhaust limit for IP 1.2.3.4
     for (let i = 0; i < 3; i++) {
       await fetch(`http://localhost:${port}/mcp`, {
@@ -339,5 +438,7 @@ describe('HTTP Rate Limiting Integration', () => {
       body: JSON.stringify({ jsonrpc: '2.0', method: 'test', id: 1 }),
     });
     expect(allowed.status).toBe(200);
+
+    delete process.env.MEMOCLAW_TRUST_PROXY;
   });
 });
