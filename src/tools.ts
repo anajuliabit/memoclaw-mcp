@@ -722,6 +722,11 @@ export const TOOLS = [
               memory_type: { type: 'string', description: 'Memory type.' },
               pinned: { type: 'boolean', description: 'Pin status.' },
               immutable: { type: 'boolean', description: 'Make this memory immutable.' },
+              expires_at: {
+                type: 'string',
+                description: 'Expiration date in ISO 8601 format, e.g. "2025-12-31T23:59:59Z".',
+              },
+              metadata: { type: 'object', description: 'Arbitrary key-value metadata.' },
             },
             required: ['content'],
           },

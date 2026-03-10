@@ -347,6 +347,27 @@ describe('handleMemory', () => {
       const { ctx } = makeCtx();
       await expect(handleMemory(ctx, 'memoclaw_import', { memories: [] })).rejects.toThrow('non-empty array');
     });
+
+    it('passes metadata and expires_at fields to API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/store/batch': (_path: string, body: any) => ({
+          memories: body.memories.map((m: any, i: number) => ({ id: String(i), ...m })),
+          failed: [],
+        }),
+      });
+      await handleMemory(ctx, 'memoclaw_import', {
+        memories: [
+          {
+            content: 'test memory',
+            metadata: { source: 'migration' },
+            expires_at: '2026-12-31T23:59:59Z',
+          },
+        ],
+      });
+      const callBody = api.makeRequest.mock.calls[0][2];
+      expect(callBody.memories[0].metadata).toEqual({ source: 'migration' });
+      expect(callBody.memories[0].expires_at).toBe('2026-12-31T23:59:59Z');
+    });
   });
 
   // ── pin / unpin ──────────────────────────────────────────────────────────
@@ -407,6 +428,33 @@ describe('handleMemory', () => {
           updates: [{ content: 'no id' }],
         }),
       ).rejects.toThrow('missing "id"');
+    });
+
+    it('validates content length in fallback path', async () => {
+      const longContent = 'x'.repeat(9000);
+      const api = mockApiWithErrors(
+        { 'PATCH /v1/memories/': { memory: { id: '1', content: 'ok' } } },
+        { 'POST /v1/memories/batch-update': new Error('HTTP 404: Not Found') },
+      );
+      const ctx = createContext(api as any, testConfig);
+      await expect(
+        handleMemory(ctx, 'memoclaw_batch_update', {
+          updates: [{ id: '1', content: longContent }],
+        }),
+      ).rejects.toThrow('exceeds');
+    });
+
+    it('validates namespace in fallback path', async () => {
+      const api = mockApiWithErrors(
+        { 'PATCH /v1/memories/': { memory: { id: '1', content: 'ok' } } },
+        { 'POST /v1/memories/batch-update': new Error('HTTP 404: Not Found') },
+      );
+      const ctx = createContext(api as any, testConfig);
+      await expect(
+        handleMemory(ctx, 'memoclaw_batch_update', {
+          updates: [{ id: '1', namespace: 'invalid namespace!' }],
+        }),
+      ).rejects.toThrow('invalid characters');
     });
 
     it('validates tags in individual updates', async () => {

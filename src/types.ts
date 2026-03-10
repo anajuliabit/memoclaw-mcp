@@ -139,6 +139,8 @@ export interface ImportMemory {
   memory_type?: string;
   pinned?: boolean;
   immutable?: boolean;
+  expires_at?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ImportArgs {

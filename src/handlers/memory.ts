@@ -121,8 +121,19 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
   switch (name) {
     case 'memoclaw_store': {
-      const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable, metadata } =
-        args as StoreArgs;
+      const {
+        content,
+        importance,
+        tags,
+        namespace,
+        memory_type,
+        session_id,
+        agent_id,
+        expires_at,
+        pinned,
+        immutable,
+        metadata,
+      } = args as StoreArgs;
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
@@ -338,7 +349,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       return bulkStoreWithFallback(
         ctx,
         memories,
-        ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'immutable'],
+        ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'immutable', 'expires_at', 'metadata'],
         '📥 Import',
         session_id,
         agent_id,
@@ -405,6 +416,14 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         };
       } catch (err: any) {
         if (err.message?.includes('404') || err.message?.includes('Not Found')) {
+          // Validate fields before sending individual requests (mirrors memoclaw_update validation)
+          for (const u of updates) {
+            if (typeof u.content === 'string') validateContentLength(u.content);
+            validateIdentifier(u.namespace, 'namespace');
+            validateIdentifier(u.memory_type, 'memory_type');
+            validateTags(u.tags);
+            validateISODate(u.expires_at as string | undefined, 'expires_at');
+          }
           let updateProgress = 0;
           const results = await withConcurrency(
             updates.map((u: any) => async () => {
