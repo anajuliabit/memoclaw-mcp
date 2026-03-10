@@ -99,6 +99,12 @@ const COMMON_FILTERS = {
     type: 'string' as const,
     description: 'Only return memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".',
   },
+  metadata: {
+    type: 'object' as const,
+    description:
+      'Filter by metadata key-value pairs. Only memories whose metadata contains ALL specified key-value pairs are returned. ' +
+      'Example: {"source": "slack", "channel": "#general"}',
+  },
 };
 
 export const TOOLS = [
@@ -823,6 +829,12 @@ export const TOOLS = [
         before: {
           type: 'string',
           description: 'Count only memories created before this ISO 8601 date, e.g. "2025-12-31T23:59:59Z".',
+        },
+        metadata: {
+          type: 'object',
+          description:
+            'Count only memories whose metadata contains ALL specified key-value pairs. ' +
+            'Example: {"source": "slack"}',
         },
       },
     },

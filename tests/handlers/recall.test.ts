@@ -77,6 +77,18 @@ describe('handleRecall', () => {
       expect(body.filters.before).toBe('2025-06-01T00:00:00Z');
     });
 
+    it('passes metadata filter to API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', {
+        query: 'test',
+        metadata: { source: 'slack', channel: '#general' },
+      });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters.metadata).toEqual({ source: 'slack', channel: '#general' });
+    });
+
     it('passes pinned filter to API', async () => {
       const { ctx, api } = makeCtx({
         'POST /v1/recall': { memories: [{ id: '1', content: 'pinned', pinned: true }] },
@@ -96,6 +108,15 @@ describe('handleRecall', () => {
     });
 
     it('omits pinned from filters when not specified', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/recall': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_recall', { query: 'test' });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.filters).toBeUndefined();
+    });
+
+    it('omits metadata from filters when not provided', async () => {
       const { ctx, api } = makeCtx({
         'POST /v1/recall': { memories: [] },
       });
@@ -145,6 +166,18 @@ describe('handleRecall', () => {
       await handleRecall(ctx, 'memoclaw_search', { query: 'test', pinned: true });
       const path = api.makeRequest.mock.calls[0][1];
       expect(path).toContain('pinned=true');
+    });
+
+    it('passes metadata filter as JSON query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories/search': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_search', {
+        query: 'test',
+        metadata: { source: 'slack' },
+      });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('metadata=%7B%22source%22%3A%22slack%22%7D');
     });
   });
 

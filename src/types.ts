@@ -34,6 +34,7 @@ export interface RecallArgs {
   after?: string;
   before?: string;
   pinned?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SearchArgs {
@@ -49,6 +50,7 @@ export interface SearchArgs {
   sort?: string;
   order?: string;
   pinned?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface GetArgs {
@@ -68,6 +70,7 @@ export interface ListArgs {
   sort?: string;
   order?: string;
   pinned?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DeleteArgs {
@@ -241,6 +244,7 @@ export interface CountArgs {
   before?: string;
   after?: string;
   pinned?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DeleteNamespaceArgs {
