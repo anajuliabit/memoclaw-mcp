@@ -169,3 +169,33 @@ describe('validateISODate', () => {
     expect(() => validateISODate('yesterday', 'before')).toThrow('not a valid date');
   });
 });
+
+// ── validateSimilarity ──────────────────────────────────────────────────────
+
+import { validateSimilarity } from '../src/validate.js';
+
+describe('validateSimilarity', () => {
+  it('returns undefined for undefined/null', () => {
+    expect(validateSimilarity(undefined)).toBeUndefined();
+    expect(validateSimilarity(null)).toBeUndefined();
+  });
+
+  it('accepts valid similarity values', () => {
+    expect(validateSimilarity(0)).toBe(0);
+    expect(validateSimilarity(0.5)).toBe(0.5);
+    expect(validateSimilarity(1)).toBe(1);
+    expect(validateSimilarity(0.85)).toBe(0.85);
+  });
+
+  it('rejects non-number values', () => {
+    expect(() => validateSimilarity('0.5')).toThrow('must be a number');
+    expect(() => validateSimilarity(true)).toThrow('must be a number');
+    expect(() => validateSimilarity(NaN)).toThrow('must be a number');
+  });
+
+  it('rejects out-of-range values', () => {
+    expect(() => validateSimilarity(-0.1)).toThrow('must be between 0.0 and 1.0');
+    expect(() => validateSimilarity(1.1)).toThrow('must be between 0.0 and 1.0');
+    expect(() => validateSimilarity(5)).toThrow('must be between 0.0 and 1.0');
+  });
+});

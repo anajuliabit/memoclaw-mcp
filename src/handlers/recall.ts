@@ -5,6 +5,7 @@ import {
   validateQuery,
   validateISODate,
   validatePaginationParam,
+  validateSimilarity,
 } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
@@ -29,6 +30,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       } = args as RecallArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
+      validateSimilarity(min_similarity);
       validateTags(tags);
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(memory_type, 'memory_type');
@@ -176,6 +178,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
+      validateSimilarity(min_similarity);
       validateIdentifier(namespace, 'namespace');
       const threshold = min_similarity ?? 0.7;
       const maxResults = limit ?? 5;
