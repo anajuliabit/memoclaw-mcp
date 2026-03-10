@@ -557,4 +557,240 @@ describe('handleMemory', () => {
       expect((result as any).structuredContent.succeeded).toBe(0);
     });
   });
+
+  // ── merge ──────────────────────────────────────────────────────────────
+  describe('memoclaw_merge', () => {
+    const sourceMemory = {
+      id: 'src-1',
+      content: 'Source content',
+      importance: 0.6,
+      tags: ['a', 'b'],
+      pinned: false,
+      immutable: false,
+      namespace: 'test',
+    };
+    const targetMemory = {
+      id: 'tgt-1',
+      content: 'Target content',
+      importance: 0.8,
+      tags: ['b', 'c'],
+      pinned: false,
+      immutable: false,
+      namespace: 'test',
+    };
+
+    function mergeCtx(overrides: { source?: any; target?: any } = {}) {
+      const src = overrides.source || sourceMemory;
+      const tgt = overrides.target || targetMemory;
+      return makeCtx({
+        'GET /v1/memories/src-1': { memory: src },
+        'GET /v1/memories/tgt-1': { memory: tgt },
+        'PATCH /v1/memories/tgt-1': (_path: string, body: any) => ({
+          memory: { ...tgt, ...body },
+        }),
+        'DELETE /v1/memories/src-1': { deleted: true },
+      });
+    }
+
+    it('merges with keep_target strategy (default)', async () => {
+      const { ctx, api } = mergeCtx();
+      const result = await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      expect(result).not.toBeNull();
+      expect(result!.content[0].text).toContain('Merged memory');
+      expect(result!.content[0].text).toContain('strategy: keep_target');
+      expect((result as any).structuredContent.deleted_id).toBe('src-1');
+      expect((result as any).structuredContent.strategy).toBe('keep_target');
+
+      // Check update payload
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall).toBeDefined();
+      const body = patchCall![2];
+      expect(body.content).toBe('Target content');
+      expect(body.tags).toEqual(['b', 'c', 'a']);
+      expect(body.importance).toBe(0.8);
+
+      // Check source was deleted
+      const deleteCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'DELETE');
+      expect(deleteCall).toBeDefined();
+    });
+
+    it('merges with keep_source strategy', async () => {
+      const { ctx, api } = mergeCtx();
+      const result = await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+        strategy: 'keep_source',
+      });
+      expect(result).not.toBeNull();
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].content).toBe('Source content');
+      expect((result as any).structuredContent.strategy).toBe('keep_source');
+    });
+
+    it('merges with combine strategy', async () => {
+      const { ctx, api } = mergeCtx();
+      const result = await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+        strategy: 'combine',
+      });
+      expect(result).not.toBeNull();
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].content).toBe('Target content\n\nSource content');
+      expect((result as any).structuredContent.strategy).toBe('combine');
+    });
+
+    it('keeps the higher importance score', async () => {
+      const { ctx, api } = mergeCtx({
+        source: { ...sourceMemory, importance: 0.95 },
+      });
+      await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].importance).toBe(0.95);
+    });
+
+    it('deduplicates merged tags', async () => {
+      const { ctx, api } = mergeCtx();
+      await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      // target has ['b', 'c'], source has ['a', 'b'] → union = ['b', 'c', 'a']
+      expect(patchCall![2].tags).toEqual(['b', 'c', 'a']);
+    });
+
+    it('preserves pinned from either memory', async () => {
+      const { ctx, api } = mergeCtx({
+        source: { ...sourceMemory, pinned: true },
+      });
+      await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].pinned).toBe(true);
+    });
+
+    it('preserves immutable from either memory', async () => {
+      const { ctx, api } = mergeCtx({
+        target: { ...targetMemory, immutable: true },
+      });
+      await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].immutable).toBe(true);
+    });
+
+    it('does not set immutable when neither memory is immutable', async () => {
+      const { ctx, api } = mergeCtx();
+      await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].immutable).toBeUndefined();
+    });
+
+    it('rejects same source and target', async () => {
+      const { ctx } = mergeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_merge', {
+          source_id: 'src-1',
+          target_id: 'src-1',
+        }),
+      ).rejects.toThrow('source_id and target_id must be different');
+    });
+
+    it('rejects invalid strategy', async () => {
+      const { ctx } = mergeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_merge', {
+          source_id: 'src-1',
+          target_id: 'tgt-1',
+          strategy: 'invalid',
+        }),
+      ).rejects.toThrow('strategy must be one of');
+    });
+
+    it('validates source_id', async () => {
+      const { ctx } = mergeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_merge', {
+          source_id: '',
+          target_id: 'tgt-1',
+        }),
+      ).rejects.toThrow('source_id');
+    });
+
+    it('validates target_id', async () => {
+      const { ctx } = mergeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_merge', {
+          source_id: 'src-1',
+          target_id: '',
+        }),
+      ).rejects.toThrow('target_id');
+    });
+
+    it('handles memories with no tags', async () => {
+      const { ctx, api } = mergeCtx({
+        source: { ...sourceMemory, tags: undefined },
+        target: { ...targetMemory, tags: undefined },
+      });
+      await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].tags).toEqual([]);
+    });
+
+    it('handles memories with no importance', async () => {
+      const { ctx, api } = mergeCtx({
+        source: { ...sourceMemory, importance: undefined },
+        target: { ...targetMemory, importance: undefined },
+      });
+      await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      expect(patchCall![2].importance).toBe(0);
+    });
+
+    it('includes resource_link to merged memory', async () => {
+      const { ctx } = mergeCtx();
+      const result = await handleMemory(ctx, 'memoclaw_merge', {
+        source_id: 'src-1',
+        target_id: 'tgt-1',
+      });
+      const link = result!.content.find((c: any) => c.type === 'resource_link');
+      expect(link).toBeDefined();
+      expect((link as any).uri).toBe('memoclaw://memories/tgt-1');
+    });
+
+    it('validates combined content length', async () => {
+      const longContent = 'x'.repeat(5000);
+      const { ctx } = mergeCtx({
+        source: { ...sourceMemory, content: longContent },
+        target: { ...targetMemory, content: longContent },
+      });
+      await expect(
+        handleMemory(ctx, 'memoclaw_merge', {
+          source_id: 'src-1',
+          target_id: 'tgt-1',
+          strategy: 'combine',
+        }),
+      ).rejects.toThrow('character limit');
+    });
+  });
 });

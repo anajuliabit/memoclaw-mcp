@@ -24,6 +24,7 @@ import type {
   UnpinArgs,
   BatchUpdateArgs,
   CountArgs,
+  MergeArgs,
 } from '../types.js';
 
 /**
@@ -542,6 +543,83 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       return {
         content: [userText(`📊 Total memories${filterStr}: ${total}`, 0.5)],
         structuredContent: { count: typeof total === 'number' ? total : undefined },
+      };
+    }
+
+    case 'memoclaw_merge': {
+      const { source_id, target_id, strategy = 'keep_target' } = args as MergeArgs;
+      validateId(source_id, 'source_id');
+      validateId(target_id, 'target_id');
+      if (source_id === target_id) {
+        throw new Error('source_id and target_id must be different');
+      }
+      if (!['keep_target', 'keep_source', 'combine'].includes(strategy)) {
+        throw new Error('strategy must be one of: keep_target, keep_source, combine');
+      }
+
+      // Fetch both memories
+      const [sourceResult, targetResult] = await Promise.all([
+        makeRequest('GET', `/v1/memories/${source_id}`),
+        makeRequest('GET', `/v1/memories/${target_id}`),
+      ]);
+      const source = sourceResult.memory || sourceResult;
+      const target = targetResult.memory || targetResult;
+
+      // Determine merged content
+      let mergedContent: string;
+      switch (strategy) {
+        case 'keep_source':
+          mergedContent = source.content;
+          break;
+        case 'combine':
+          mergedContent = `${target.content}\n\n${source.content}`;
+          validateContentLength(mergedContent, 'Combined content');
+          break;
+        case 'keep_target':
+        default:
+          mergedContent = target.content;
+          break;
+      }
+
+      // Merge tags (union, deduplicated)
+      const sourceTags: string[] = source.tags || [];
+      const targetTags: string[] = target.tags || [];
+      const mergedTags = [...new Set([...targetTags, ...sourceTags])];
+
+      // Keep higher importance
+      const sourceImportance = typeof source.importance === 'number' ? source.importance : 0;
+      const targetImportance = typeof target.importance === 'number' ? target.importance : 0;
+      const mergedImportance = Math.max(sourceImportance, targetImportance);
+
+      // Preserve pinned/immutable from either memory
+      const mergedPinned = !!(source.pinned || target.pinned);
+      const mergedImmutable = !!(source.immutable || target.immutable);
+
+      // Build update payload
+      const updateBody: Record<string, any> = {
+        content: mergedContent,
+        importance: mergedImportance,
+        tags: mergedTags,
+        pinned: mergedPinned,
+      };
+      // Only set immutable if true (avoid locking if neither was immutable)
+      if (mergedImmutable) updateBody.immutable = true;
+
+      // Update target with merged data
+      const updateResult = await makeRequest('PATCH', `/v1/memories/${target_id}`, updateBody);
+      const merged = updateResult.memory || updateResult;
+
+      // Delete source
+      await makeRequest('DELETE', `/v1/memories/${source_id}`);
+
+      return {
+        content: [
+          userAndAssistantText(
+            `🔀 Merged memory ${source_id} into ${target_id} (strategy: ${strategy})\n\n${formatMemory(merged)}\n\n🗑️ Source memory ${source_id} deleted`,
+          ),
+          memoryResourceLink(target_id, 'Merged memory'),
+        ],
+        structuredContent: { memory: merged, deleted_id: source_id, strategy },
       };
     }
 
