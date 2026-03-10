@@ -100,6 +100,25 @@ describe('handleRecall', () => {
       const path = api.makeRequest.mock.calls[0][1];
       expect(path).toContain('before=2025-12-31T00%3A00%3A00Z');
     });
+
+    it('passes sort and order as query params', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories/search': { memories: [] },
+      });
+      await handleRecall(ctx, 'memoclaw_search', { query: 'test', sort: 'importance', order: 'desc' });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('sort=importance');
+      expect(path).toContain('order=desc');
+    });
+
+    it('passes pinned filter as query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories/search': { memories: [{ id: '1', content: 'pinned result', pinned: true }] },
+      });
+      await handleRecall(ctx, 'memoclaw_search', { query: 'test', pinned: true });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('pinned=true');
+    });
   });
 
   describe('memoclaw_context', () => {

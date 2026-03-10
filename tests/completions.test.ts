@@ -80,6 +80,74 @@ describe('Completions', () => {
     expect(mockMakeRequest).not.toHaveBeenCalled();
   });
 
+  it('returns category completions', async () => {
+    const result = await handleComplete(
+      { type: 'ref/prompt', name: 'review-memories' },
+      { name: 'category', value: 'st' },
+    );
+
+    expect(result.completion.values).toEqual(['stale']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns all categories when value is empty', async () => {
+    const result = await handleComplete(
+      { type: 'ref/prompt', name: 'review-memories' },
+      { name: 'category', value: '' },
+    );
+
+    expect(result.completion.values).toEqual(['stale', 'fresh', 'hot', 'decaying']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns relation_type completions', async () => {
+    const result = await handleComplete(
+      { type: 'ref/prompt', name: 'create-relation' },
+      { name: 'relation_type', value: 'der' },
+    );
+
+    expect(result.completion.values).toEqual(['derived_from']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns all relation_types when value is empty', async () => {
+    const result = await handleComplete(
+      { type: 'ref/prompt', name: 'create-relation' },
+      { name: 'relation_type', value: '' },
+    );
+
+    expect(result.completion.values).toEqual(['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns sort completions', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'list' }, { name: 'sort', value: 'cre' });
+
+    expect(result.completion.values).toEqual(['created_at']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns all sort fields when value is empty', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'list' }, { name: 'sort', value: '' });
+
+    expect(result.completion.values).toEqual(['created_at', 'updated_at', 'importance']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns order completions', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'list' }, { name: 'order', value: 'a' });
+
+    expect(result.completion.values).toEqual(['asc']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns all order values when value is empty', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'list' }, { name: 'order', value: '' });
+
+    expect(result.completion.values).toEqual(['asc', 'desc']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
   it('returns empty for unknown arguments', async () => {
     const result = await handleComplete(
       { type: 'ref/prompt', name: 'load-context' },

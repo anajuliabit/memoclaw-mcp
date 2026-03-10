@@ -71,7 +71,8 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_search': {
-      const { query, limit, namespace, tags, memory_type, session_id, agent_id, after, before } = args as SearchArgs;
+      const { query, limit, namespace, tags, memory_type, session_id, agent_id, after, before, sort, order, pinned } =
+        args as SearchArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
@@ -91,6 +92,9 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (agent_id) params.set('agent_id', agent_id);
       if (after) params.set('after', after);
       if (before) params.set('before', before);
+      if (sort) params.set('sort', sort);
+      if (order) params.set('order', order);
+      if (pinned !== undefined) params.set('pinned', String(pinned));
       const result = await makeRequest('GET', `/v1/memories/search?${params}`);
       const memories = result.memories || result.data || [];
       if (memories.length === 0) {

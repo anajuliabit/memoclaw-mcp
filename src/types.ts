@@ -44,6 +44,9 @@ export interface SearchArgs {
   agent_id?: string;
   after?: string;
   before?: string;
+  sort?: string;
+  order?: string;
+  pinned?: boolean;
 }
 
 export interface GetArgs {
@@ -60,6 +63,9 @@ export interface ListArgs {
   agent_id?: string;
   after?: string;
   before?: string;
+  sort?: string;
+  order?: string;
+  pinned?: boolean;
 }
 
 export interface DeleteArgs {
@@ -229,6 +235,7 @@ export interface CountArgs {
   session_id?: string;
   before?: string;
   after?: string;
+  pinned?: boolean;
 }
 
 export interface DeleteNamespaceArgs {
