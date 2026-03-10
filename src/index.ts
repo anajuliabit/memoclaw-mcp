@@ -29,6 +29,7 @@ import { createCompletionHandler } from './completions.js';
 import { mcpLogger } from './logging.js';
 import type { LogLevel } from './logging.js';
 import { RateLimiter, loadRateLimitConfig, getClientIp } from './rate-limiter.js';
+import { classifyError } from './classify-error.js';
 
 // Read version from package.json to avoid duplication
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -196,73 +197,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     };
   }
 });
-
-/** Error codes for structured error responses (MCP 2025-06-18). */
-type ErrorCode =
-  | 'VALIDATION_ERROR'
-  | 'API_ERROR'
-  | 'TIMEOUT'
-  | 'RATE_LIMITED'
-  | 'PAYMENT_REQUIRED'
-  | 'CANCELLED'
-  | 'UNKNOWN';
-
-/**
- * Classify an error into a structured error code.
- * Inspects the error message and known error types to determine the category.
- */
-function classifyError(error: unknown): ErrorCode {
-  if (!error) return 'UNKNOWN';
-
-  const name = error instanceof Error ? error.name : '';
-  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
-
-  // Cancellation (from MCP notifications/cancelled)
-  if (name === 'CancellationError' || msg.includes('cancelled') || msg.includes('aborted')) {
-    return 'CANCELLED';
-  }
-
-  // Validation errors (client-side input validation)
-  if (
-    msg.includes('is required') ||
-    msg.includes('must be') ||
-    msg.includes('cannot be empty') ||
-    msg.includes('invalid characters') ||
-    msg.includes('exceeds') ||
-    msg.includes('not a valid') ||
-    msg.includes('no valid update fields')
-  ) {
-    return 'VALIDATION_ERROR';
-  }
-
-  // Rate limiting
-  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many requests')) {
-    return 'RATE_LIMITED';
-  }
-
-  // Payment required (x402)
-  if (msg.includes('402') || msg.includes('payment required') || msg.includes('x402')) {
-    return 'PAYMENT_REQUIRED';
-  }
-
-  // Timeout
-  if (
-    msg.includes('timeout') ||
-    msg.includes('timed out') ||
-    msg.includes('etimedout') ||
-    msg.includes('econnaborted')
-  ) {
-    return 'TIMEOUT';
-  }
-
-  // HTTP/API errors
-  if (msg.includes('http') || msg.includes('status') || /\b[45]\d{2}\b/.test(msg)) {
-    return 'API_ERROR';
-  }
-
-  return 'UNKNOWN';
-}
-
 /**
  * Determine transport mode from CLI args and env vars.
  * --http or MEMOCLAW_TRANSPORT=http → Streamable HTTP
@@ -631,8 +565,11 @@ async function main() {
 
 main().catch(console.error);
 
-// Graceful shutdown
+// Graceful shutdown (guarded against double invocation from rapid SIGINT/SIGTERM)
+let _shuttingDown = false;
 function shutdown() {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
   console.error('MemoClaw MCP server shutting down...');
   // Clean up HTTP sessions, sweep interval, and stop accepting connections
   _cleanupHttp?.();
