@@ -1,10 +1,11 @@
 import { formatMemory, withConcurrency, userAndAssistantText, assistantText, userText } from '../format.js';
 import { validateId, validateIdentifier } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
+import { throwIfCancelled } from './types.js';
 import type { CreateRelationArgs, ListRelationsArgs, DeleteRelationArgs, GraphArgs } from '../types.js';
 
 export async function handleRelations(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
-  const { makeRequest } = ctx;
+  const { makeRequest, signal } = ctx;
 
   switch (name) {
     case 'memoclaw_create_relation': {
@@ -79,6 +80,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       let frontier = [memory_id];
 
       for (let d = 0; d <= depth && frontier.length > 0; d++) {
+        throwIfCancelled(signal);
         const nextFrontier: string[] = [];
         const unvisited = frontier.filter((mid) => !visited.has(mid));
         if (unvisited.length === 0) break;
@@ -93,6 +95,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
                 .catch(() => ({ id: mid, data: { id: mid, content: '(could not fetch)' } })),
           ),
           10,
+          signal,
         );
         for (const r of memResults) {
           if (r.status === 'fulfilled') nodes.push(r.value.data);
@@ -108,6 +111,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
                   .catch(() => ({ id: mid, relations: [] as any[] })),
             ),
             10,
+            signal,
           );
           for (const r of relResults) {
             if (r.status === 'fulfilled') {
