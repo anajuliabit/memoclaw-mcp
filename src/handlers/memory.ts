@@ -121,7 +121,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
 
   switch (name) {
     case 'memoclaw_store': {
-      const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable } =
+      const { content, importance, tags, namespace, memory_type, session_id, agent_id, expires_at, pinned, immutable, metadata } =
         args as StoreArgs;
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
@@ -144,6 +144,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       if (expires_at) body.expires_at = expires_at;
       if (pinned !== undefined) body.pinned = pinned;
       if (immutable !== undefined) body.immutable = immutable;
+      if (metadata !== undefined) body.metadata = metadata;
       const result = await makeRequest('POST', '/v1/store', body);
       const memory = result.memory || result;
       return {
@@ -314,7 +315,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       return bulkStoreWithFallback(
         ctx,
         memories,
-        ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable'],
+        ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable', 'metadata'],
         '✅ Bulk store',
         session_id,
         agent_id,

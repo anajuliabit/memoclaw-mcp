@@ -57,6 +57,28 @@ describe('handleMemory', () => {
       expect(body.pinned).toBe(true);
       expect(body.immutable).toBe(true);
     });
+
+    it('passes metadata to the API', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/store': { memory: { id: '1', content: 'test', metadata: { source: 'slack' } } },
+      });
+      const result = await handleMemory(ctx, 'memoclaw_store', {
+        content: 'test',
+        metadata: { source: 'slack', channel: '#general' },
+      });
+      expect(result).not.toBeNull();
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.metadata).toEqual({ source: 'slack', channel: '#general' });
+    });
+
+    it('omits metadata when not provided', async () => {
+      const { ctx, api } = makeCtx({
+        'POST /v1/store': { memory: { id: '1', content: 'test' } },
+      });
+      await handleMemory(ctx, 'memoclaw_store', { content: 'test' });
+      const body = api.makeRequest.mock.calls[0][2];
+      expect(body.metadata).toBeUndefined();
+    });
   });
 
   // ── get ──────────────────────────────────────────────────────────────────
