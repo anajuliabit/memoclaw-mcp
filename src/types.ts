@@ -290,6 +290,12 @@ export interface CheckDuplicatesArgs {
   limit?: number;
 }
 
+export interface MergeArgs {
+  source_id: string;
+  target_id: string;
+  strategy?: 'keep_target' | 'keep_source' | 'combine';
+}
+
 export interface MigrateArgs {
   path?: string;
   files?: MigrateFile[];
@@ -335,7 +341,8 @@ export type ToolArgs =
   | { name: 'memoclaw_core_memories'; args: CoreMemoriesArgs }
   | { name: 'memoclaw_stats'; args: StatsArgs }
   | { name: 'memoclaw_migrate'; args: MigrateArgs }
-  | { name: 'memoclaw_check_duplicates'; args: CheckDuplicatesArgs };
+  | { name: 'memoclaw_check_duplicates'; args: CheckDuplicatesArgs }
+  | { name: 'memoclaw_merge'; args: MergeArgs };
 
 /** Map from tool name to its args type */
 export type ToolArgsMap = {

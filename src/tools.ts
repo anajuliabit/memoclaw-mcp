@@ -1281,4 +1281,49 @@ export const TOOLS = [
       required: ['has_duplicates', 'duplicates'] as string[],
     },
   },
+  {
+    name: 'memoclaw_merge',
+    description:
+      '🔀 MERGE DUPLICATES: Combine two memories into one. The source memory is merged into the target, then deleted. ' +
+      'Tags are combined (union), the higher importance score is kept, and pinned/immutable flags are preserved from either. ' +
+      'Strategies: keep_target (default) keeps target content; keep_source uses source content; combine concatenates both. ' +
+      'Use after memoclaw_check_duplicates to clean up duplicates. Cost: one update + one delete (free).',
+    title: 'Merge memories',
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        source_id: {
+          type: 'string',
+          description: 'ID of the memory to merge FROM (will be deleted after merge).',
+        },
+        target_id: {
+          type: 'string',
+          description: 'ID of the memory to merge INTO (will be updated with merged data).',
+        },
+        strategy: {
+          type: 'string',
+          enum: ['keep_target', 'keep_source', 'combine'],
+          description:
+            'Merge strategy. keep_target (default): keep target content. ' +
+            'keep_source: use source content. combine: concatenate both contents.',
+        },
+      },
+      required: ['source_id', 'target_id'],
+    },
+    outputSchema: {
+      type: 'object' as const,
+      properties: {
+        memory: MEMORY_OBJECT_SCHEMA,
+        deleted_id: { type: 'string' as const },
+        strategy: { type: 'string' as const },
+      },
+      required: ['memory', 'deleted_id', 'strategy'] as string[],
+    },
+  },
 ];
