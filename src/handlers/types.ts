@@ -79,12 +79,16 @@ export function createContext(
   progress?: ProgressCallback,
   signal?: AbortSignal,
 ): HandlerContext {
+  const resolvedSignal = signal || new AbortController().signal;
   return {
     api,
     config,
-    makeRequest: api.makeRequest,
+    // Wrap makeRequest to automatically forward the MCP cancellation signal
+    // to every API call, so in-flight fetch() requests abort immediately
+    // when the client sends notifications/cancelled.
+    makeRequest: (method: string, path: string, body?: any) => api.makeRequest(method, path, body, resolvedSignal),
     account: api.account,
     progress: progress || (async () => {}),
-    signal: signal || new AbortController().signal,
+    signal: resolvedSignal,
   };
 }

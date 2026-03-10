@@ -227,4 +227,81 @@ describe('API Client', () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('external signal (MCP cancellation)', () => {
+    it('aborts immediately when external signal is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const client = createApiClient({ ...config, maxRetries: 0 });
+      await expect(client.makeRequest('GET', '/v1/memories', undefined, controller.signal)).rejects.toThrow(
+        'Operation cancelled by client',
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('aborts in-flight fetch when external signal fires', async () => {
+      const controller = new AbortController();
+      // Simulate a long-running fetch that responds to abort
+      fetchSpy.mockImplementation(
+        (_url: string, opts: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          }),
+      );
+
+      const client = createApiClient({ ...config, timeout: 30000, maxRetries: 0 });
+      const promise = client.makeRequest('GET', '/v1/memories', undefined, controller.signal);
+
+      // Give the fetch a moment to start, then cancel
+      await new Promise((r) => setTimeout(r, 10));
+      controller.abort();
+
+      await expect(promise).rejects.toThrow('Operation cancelled by client');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws CancellationError (not timeout) when external signal aborts', async () => {
+      const controller = new AbortController();
+      fetchSpy.mockImplementation(
+        (_url: string, opts: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          }),
+      );
+
+      const client = createApiClient({ ...config, timeout: 30000, maxRetries: 0 });
+      const promise = client.makeRequest('GET', '/v1/memories', undefined, controller.signal);
+
+      await new Promise((r) => setTimeout(r, 10));
+      controller.abort();
+
+      try {
+        await promise;
+        expect.unreachable('should have thrown');
+      } catch (err: any) {
+        expect(err.name).toBe('CancellationError');
+        expect(err.message).toContain('cancelled');
+      }
+    });
+
+    it('does not retry when cancelled via external signal', async () => {
+      const controller = new AbortController();
+      fetchSpy.mockImplementation(
+        (_url: string, opts: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          }),
+      );
+
+      const client = createApiClient({ ...config, timeout: 30000, maxRetries: 3 });
+      const promise = client.makeRequest('GET', '/v1/memories', undefined, controller.signal);
+
+      await new Promise((r) => setTimeout(r, 10));
+      controller.abort();
+
+      await expect(promise).rejects.toThrow('Operation cancelled by client');
+      // Should NOT retry — only 1 fetch call
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
 });

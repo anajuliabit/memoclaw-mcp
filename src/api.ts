@@ -48,20 +48,35 @@ export function createApiClient(config: Config) {
     return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
-  async function makeRequest(method: string, path: string, body?: any) {
+  async function makeRequest(method: string, path: string, body?: any, externalSignal?: AbortSignal) {
     const url = `${apiUrl}${path}`;
     const { timeout, maxRetries } = config;
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // Bail out immediately if already cancelled before starting the attempt
+      if (externalSignal?.aborted) {
+        const err = new Error('Operation cancelled by client');
+        err.name = 'CancellationError';
+        throw err;
+      }
+
       if (attempt > 0) {
         mcpLogger.debug('api', { event: 'retry', method, path, attempt });
         await backoff(attempt - 1);
       }
 
+      let onExternalAbort: (() => void) | undefined;
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeout);
+
+        // If an external signal (e.g. MCP cancellation) is provided, abort
+        // the fetch when either the timeout or the external signal fires.
+        if (externalSignal && !externalSignal.aborted) {
+          onExternalAbort = () => controller.abort();
+          externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+        }
 
         const headers: Record<string, string> = {};
         if (body) {
@@ -80,6 +95,7 @@ export function createApiClient(config: Config) {
         });
 
         clearTimeout(timer);
+        if (onExternalAbort) externalSignal!.removeEventListener('abort', onExternalAbort);
 
         // Handle 402 Payment Required (free tier exhausted) — no retry needed
         if (res.status === 402) {
@@ -103,6 +119,11 @@ export function createApiClient(config: Config) {
 
           const controller2 = new AbortController();
           const timer2 = setTimeout(() => controller2.abort(), timeout);
+          let onExternalAbort2: (() => void) | undefined;
+          if (externalSignal && !externalSignal.aborted) {
+            onExternalAbort2 = () => controller2.abort();
+            externalSignal.addEventListener('abort', onExternalAbort2, { once: true });
+          }
 
           res = await fetch(url, {
             method,
@@ -112,6 +133,7 @@ export function createApiClient(config: Config) {
           });
 
           clearTimeout(timer2);
+          if (onExternalAbort2) externalSignal!.removeEventListener('abort', onExternalAbort2);
         }
 
         // Retry on transient server errors
@@ -127,6 +149,16 @@ export function createApiClient(config: Config) {
 
         return res.json();
       } catch (err: any) {
+        // Clean up listeners on error paths
+        if (onExternalAbort) externalSignal!.removeEventListener('abort', onExternalAbort);
+
+        // If the external signal caused the abort, surface it as cancellation (no retry)
+        if (err.name === 'AbortError' && externalSignal?.aborted) {
+          const cancelErr = new Error('Operation cancelled by client');
+          cancelErr.name = 'CancellationError';
+          throw cancelErr;
+        }
+
         // Retry on network errors and timeouts (but not client errors)
         if (err.name === 'AbortError') {
           lastError = new Error(`Request timed out after ${timeout}ms`);
