@@ -18,6 +18,7 @@ export interface StoreArgs {
   expires_at?: string;
   pinned?: boolean;
   immutable?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface RecallArgs {
@@ -121,6 +122,7 @@ export interface BulkStoreMemory {
   pinned?: boolean;
   expires_at?: string;
   immutable?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BulkStoreArgs {

@@ -160,6 +160,11 @@ export const TOOLS = [
           description:
             'If true, this memory cannot be updated or deleted after creation. This is a one-way operation and cannot be reversed.',
         },
+        metadata: {
+          type: 'object',
+          description:
+            'Arbitrary key-value metadata to attach to this memory. Useful for storing structured data alongside the content, e.g. {"source": "slack", "channel": "#general"}.',
+        },
       },
       required: ['content'],
     },
@@ -764,6 +769,7 @@ export const TOOLS = [
               memory_type: { type: 'string', enum: MEMORY_TYPE_ENUM, description: 'Memory type.' },
               pinned: { type: 'boolean', description: 'Pin to prevent decay.' },
               immutable: { type: 'boolean', description: 'Make this memory immutable (one-way, cannot be reversed).' },
+              metadata: { type: 'object', description: 'Arbitrary key-value metadata.' },
             },
             required: ['content'],
           },
