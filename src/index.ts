@@ -198,7 +198,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 });
 
 /** Error codes for structured error responses (MCP 2025-06-18). */
-type ErrorCode =
+export type ErrorCode =
   | 'VALIDATION_ERROR'
   | 'API_ERROR'
   | 'TIMEOUT'
@@ -211,11 +211,21 @@ type ErrorCode =
  * Classify an error into a structured error code.
  * Inspects the error message and known error types to determine the category.
  */
-function classifyError(error: unknown): ErrorCode {
+export function classifyError(error: unknown): ErrorCode {
   if (!error) return 'UNKNOWN';
 
   const name = error instanceof Error ? error.name : '';
   const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+
+  // Timeout (checked before cancellation so ECONNABORTED doesn't match "aborted")
+  if (
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('etimedout') ||
+    msg.includes('econnaborted')
+  ) {
+    return 'TIMEOUT';
+  }
 
   // Cancellation (from MCP notifications/cancelled)
   if (name === 'CancellationError' || msg.includes('cancelled') || msg.includes('aborted')) {
@@ -235,28 +245,20 @@ function classifyError(error: unknown): ErrorCode {
     return 'VALIDATION_ERROR';
   }
 
-  // Rate limiting
-  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many requests')) {
+  // Rate limiting — match "HTTP 429" pattern or descriptive phrases, not bare "429"
+  if (/\bhttp\s+429\b/.test(msg) || msg.includes('rate limit') || msg.includes('too many requests')) {
     return 'RATE_LIMITED';
   }
 
-  // Payment required (x402)
-  if (msg.includes('402') || msg.includes('payment required') || msg.includes('x402')) {
+  // Payment required (x402) — match "HTTP 402" pattern or descriptive phrases, not bare "402"
+  if (/\bhttp\s+402\b/.test(msg) || msg.includes('payment required') || msg.includes('x402')) {
     return 'PAYMENT_REQUIRED';
   }
 
-  // Timeout
-  if (
-    msg.includes('timeout') ||
-    msg.includes('timed out') ||
-    msg.includes('etimedout') ||
-    msg.includes('econnaborted')
-  ) {
-    return 'TIMEOUT';
-  }
-
-  // HTTP/API errors
-  if (msg.includes('http') || msg.includes('status') || /\b[45]\d{2}\b/.test(msg)) {
+  // HTTP/API errors — require "http" or "status" keywords; the standalone
+  // /\b[45]\d{2}\b/ regex was removed because it false-matches non-HTTP numbers
+  // like "port 4500" or "limit of 500" (see issue #153)
+  if (msg.includes('http') || msg.includes('status')) {
     return 'API_ERROR';
   }
 
