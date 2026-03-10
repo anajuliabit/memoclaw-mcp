@@ -28,6 +28,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         after,
         before,
         pinned,
+        metadata,
       } = args as RecallArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
@@ -45,6 +46,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (after) filters.after = after;
       if (before) filters.before = before;
       if (pinned !== undefined) filters.pinned = pinned;
+      if (metadata !== undefined) filters.metadata = metadata;
       const result = await makeRequest('POST', '/v1/recall', {
         query,
         limit,
@@ -73,8 +75,21 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_search': {
-      const { query, limit, namespace, tags, memory_type, session_id, agent_id, after, before, sort, order, pinned } =
-        args as SearchArgs;
+      const {
+        query,
+        limit,
+        namespace,
+        tags,
+        memory_type,
+        session_id,
+        agent_id,
+        after,
+        before,
+        sort,
+        order,
+        pinned,
+        metadata,
+      } = args as SearchArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
@@ -97,6 +112,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (sort) params.set('sort', sort);
       if (order) params.set('order', order);
       if (pinned !== undefined) params.set('pinned', String(pinned));
+      if (metadata !== undefined) params.set('metadata', JSON.stringify(metadata));
       const result = await makeRequest('GET', `/v1/memories/search?${params}`);
       const memories = result.memories || result.data || [];
       if (memories.length === 0) {

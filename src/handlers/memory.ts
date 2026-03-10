@@ -181,8 +181,21 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_list': {
-      const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after, before, sort, order, pinned } =
-        args as ListArgs;
+      const {
+        limit,
+        offset,
+        tags,
+        namespace,
+        memory_type,
+        session_id,
+        agent_id,
+        after,
+        before,
+        sort,
+        order,
+        pinned,
+        metadata,
+      } = args as ListArgs;
       validatePaginationParam(limit, 'limit');
       validatePaginationParam(offset, 'offset');
       validateTags(tags);
@@ -205,6 +218,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       if (sort) params.set('sort', sort);
       if (order) params.set('order', order);
       if (pinned !== undefined) params.set('pinned', String(pinned));
+      if (metadata !== undefined) params.set('metadata', JSON.stringify(metadata));
       const result = await makeRequest('GET', `/v1/memories?${params}`);
       const memories = result.memories || result.data || [];
       const total = result.total ?? memories.length;
@@ -475,7 +489,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_count': {
-      const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned } = args as CountArgs;
+      const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned, metadata } = args as CountArgs;
       validateISODate(after, 'after');
       validateISODate(before, 'before');
       const params = new URLSearchParams();
@@ -487,6 +501,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       if (before) params.set('before', before);
       if (after) params.set('after', after);
       if (pinned !== undefined) params.set('pinned', String(pinned));
+      if (metadata !== undefined) params.set('metadata', JSON.stringify(metadata));
 
       let total: number | string = 'unknown';
       try {
@@ -538,6 +553,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         pinned !== undefined && `pinned=${pinned}`,
         after && `after=${after}`,
         before && `before=${before}`,
+        metadata && `metadata=${JSON.stringify(metadata)}`,
       ].filter(Boolean);
       const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
       return {

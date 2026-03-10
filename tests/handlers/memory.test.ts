@@ -165,6 +165,24 @@ describe('handleMemory', () => {
       const path = api.makeRequest.mock.calls[0][1];
       expect(path).toContain('pinned=false');
     });
+
+    it('passes metadata filter as JSON query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories': { memories: [], total: 0 },
+      });
+      await handleMemory(ctx, 'memoclaw_list', { metadata: { source: 'slack' } });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('metadata=%7B%22source%22%3A%22slack%22%7D');
+    });
+
+    it('omits metadata from query when not provided', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories': { memories: [], total: 0 },
+      });
+      await handleMemory(ctx, 'memoclaw_list', {});
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).not.toContain('metadata');
+    });
   });
 
   // ── update ───────────────────────────────────────────────────────────────
@@ -517,6 +535,19 @@ describe('handleMemory', () => {
       expect(result!.content[0].text).toContain('pinned=true');
       const callUrl = api.makeRequest.mock.calls[0][1];
       expect(callUrl).toContain('pinned=true');
+    });
+
+    it('passes metadata filter as JSON query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories/count': { count: 2 },
+      });
+      const result = await handleMemory(ctx, 'memoclaw_count', {
+        metadata: { source: 'slack' },
+      });
+      expect(result!.content[0].text).toContain('2');
+      expect(result!.content[0].text).toContain('metadata');
+      const callUrl = api.makeRequest.mock.calls[0][1];
+      expect(callUrl).toContain('metadata=%7B%22source%22%3A%22slack%22%7D');
     });
   });
 
