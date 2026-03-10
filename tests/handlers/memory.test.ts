@@ -115,6 +115,34 @@ describe('handleMemory', () => {
         'tags[1] must be a non-empty string',
       );
     });
+
+    it('passes sort and order as query params', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories': { memories: [], total: 0 },
+      });
+      await handleMemory(ctx, 'memoclaw_list', { sort: 'importance', order: 'asc' });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('sort=importance');
+      expect(path).toContain('order=asc');
+    });
+
+    it('passes pinned filter as query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories': { memories: [{ id: '1', content: 'a', pinned: true }], total: 1 },
+      });
+      await handleMemory(ctx, 'memoclaw_list', { pinned: true });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('pinned=true');
+    });
+
+    it('passes pinned=false filter as query param', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories': { memories: [], total: 0 },
+      });
+      await handleMemory(ctx, 'memoclaw_list', { pinned: false });
+      const path = api.makeRequest.mock.calls[0][1];
+      expect(path).toContain('pinned=false');
+    });
   });
 
   // ── update ───────────────────────────────────────────────────────────────
@@ -408,6 +436,17 @@ describe('handleMemory', () => {
       expect(callUrl).toContain('session_id=sess-123');
       expect(callUrl).toContain('after=2025-01-01T00%3A00%3A00Z');
       expect(callUrl).toContain('before=2025-12-31T23%3A59%3A59Z');
+    });
+
+    it('passes pinned filter', async () => {
+      const { ctx, api } = makeCtx({
+        'GET /v1/memories/count': { count: 3 },
+      });
+      const result = await handleMemory(ctx, 'memoclaw_count', { pinned: true });
+      expect(result!.content[0].text).toContain('3');
+      expect(result!.content[0].text).toContain('pinned=true');
+      const callUrl = api.makeRequest.mock.calls[0][1];
+      expect(callUrl).toContain('pinned=true');
     });
   });
 

@@ -168,7 +168,8 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_list': {
-      const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after, before } = args as ListArgs;
+      const { limit, offset, tags, namespace, memory_type, session_id, agent_id, after, before, sort, order, pinned } =
+        args as ListArgs;
       validatePaginationParam(limit, 'limit');
       validatePaginationParam(offset, 'offset');
       validateTags(tags);
@@ -188,6 +189,9 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       if (agent_id) params.set('agent_id', agent_id);
       if (after) params.set('after', after);
       if (before) params.set('before', before);
+      if (sort) params.set('sort', sort);
+      if (order) params.set('order', order);
+      if (pinned !== undefined) params.set('pinned', String(pinned));
       const result = await makeRequest('GET', `/v1/memories?${params}`);
       const memories = result.memories || result.data || [];
       const total = result.total ?? memories.length;
@@ -450,7 +454,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_count': {
-      const { namespace, tags, agent_id, memory_type, session_id, before, after } = args as CountArgs;
+      const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned } = args as CountArgs;
       validateISODate(after, 'after');
       validateISODate(before, 'before');
       const params = new URLSearchParams();
@@ -461,6 +465,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       if (session_id) params.set('session_id', session_id);
       if (before) params.set('before', before);
       if (after) params.set('after', after);
+      if (pinned !== undefined) params.set('pinned', String(pinned));
 
       let total: number | string = 'unknown';
       try {
@@ -509,6 +514,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         agent_id && `agent=${agent_id}`,
         session_id && `session=${session_id}`,
         tags?.length && `tags=${tags.join(',')}`,
+        pinned !== undefined && `pinned=${pinned}`,
         after && `after=${after}`,
         before && `before=${before}`,
       ].filter(Boolean);

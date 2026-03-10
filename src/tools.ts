@@ -87,6 +87,10 @@ const COMMON_FILTERS = {
   memory_type: { type: 'string' as const, enum: MEMORY_TYPE_ENUM, description: 'Filter by memory type.' },
   session_id: { type: 'string' as const, description: 'Filter by session ID.' },
   agent_id: { type: 'string' as const, description: 'Filter by agent ID.' },
+  pinned: {
+    type: 'boolean' as const,
+    description: 'Filter by pinned status. true = only pinned, false = only unpinned.',
+  },
   after: {
     type: 'string' as const,
     description: 'Only return memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".',
@@ -228,6 +232,16 @@ export const TOOLS = [
       properties: {
         query: { type: 'string', description: 'Keyword or phrase to search for (case-insensitive).' },
         limit: { type: 'number', description: 'Maximum number of results. Default: 20. Max: 100.' },
+        sort: {
+          type: 'string',
+          enum: ['created_at', 'updated_at', 'importance'],
+          description: 'Sort field. Default: "created_at".',
+        },
+        order: {
+          type: 'string',
+          enum: ['asc', 'desc'],
+          description: 'Sort order. Default: "desc" (newest first).',
+        },
         ...COMMON_FILTERS,
       },
       required: ['query'],
@@ -283,6 +297,16 @@ export const TOOLS = [
       properties: {
         limit: { type: 'number', description: 'Max results per page. Default: 20. Max: 100.' },
         offset: { type: 'number', description: 'Pagination offset. Default: 0.' },
+        sort: {
+          type: 'string',
+          enum: ['created_at', 'updated_at', 'importance'],
+          description: 'Sort field. Default: "created_at".',
+        },
+        order: {
+          type: 'string',
+          enum: ['asc', 'desc'],
+          description: 'Sort order. Default: "desc" (newest first).',
+        },
         ...COMMON_FILTERS,
       },
     },
@@ -780,6 +804,7 @@ export const TOOLS = [
         agent_id: { type: 'string', description: 'Count only memories from this agent.' },
         memory_type: { type: 'string', enum: MEMORY_TYPE_ENUM, description: 'Count only memories of this type.' },
         session_id: { type: 'string', description: 'Count only memories from this session.' },
+        pinned: { type: 'boolean', description: 'Count only pinned (true) or unpinned (false) memories.' },
         after: {
           type: 'string',
           description: 'Count only memories created after this ISO 8601 date, e.g. "2025-01-01T00:00:00Z".',

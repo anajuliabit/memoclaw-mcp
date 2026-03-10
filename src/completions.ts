@@ -9,6 +9,10 @@ import type { ApiClient } from './api.js';
 import type { Config } from './config.js';
 
 const MEMORY_TYPES = ['correction', 'preference', 'decision', 'project', 'observation', 'general'];
+const SUGGESTED_CATEGORIES = ['stale', 'fresh', 'hot', 'decaying'];
+const RELATION_TYPES = ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'];
+const SORT_FIELDS = ['created_at', 'updated_at', 'importance'];
+const SORT_ORDERS = ['asc', 'desc'];
 
 /** Simple TTL cache for namespace and tag lists */
 interface CacheEntry<T> {
@@ -83,6 +87,26 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
     // Provide completions for 'memory_type' argument
     if (argName === 'memory_type') {
       return { completion: filterValues(MEMORY_TYPES, partial) };
+    }
+
+    // Provide completions for 'category' argument (memoclaw_suggested)
+    if (argName === 'category') {
+      return { completion: filterValues(SUGGESTED_CATEGORIES, partial) };
+    }
+
+    // Provide completions for 'relation_type' argument (memoclaw_create_relation, memoclaw_graph)
+    if (argName === 'relation_type') {
+      return { completion: filterValues(RELATION_TYPES, partial) };
+    }
+
+    // Provide completions for 'sort' argument (memoclaw_list, memoclaw_search)
+    if (argName === 'sort') {
+      return { completion: filterValues(SORT_FIELDS, partial) };
+    }
+
+    // Provide completions for 'order' argument (memoclaw_list, memoclaw_search)
+    if (argName === 'order') {
+      return { completion: filterValues(SORT_ORDERS, partial) };
     }
 
     // No completions available for this argument
