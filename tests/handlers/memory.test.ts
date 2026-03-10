@@ -605,9 +605,7 @@ describe('handleMemory', () => {
       expect((result as any).structuredContent.strategy).toBe('keep_target');
 
       // Check update payload
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall).toBeDefined();
       const body = patchCall![2];
       expect(body.content).toBe('Target content');
@@ -615,9 +613,7 @@ describe('handleMemory', () => {
       expect(body.importance).toBe(0.8);
 
       // Check source was deleted
-      const deleteCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'DELETE',
-      );
+      const deleteCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'DELETE');
       expect(deleteCall).toBeDefined();
     });
 
@@ -629,9 +625,7 @@ describe('handleMemory', () => {
         strategy: 'keep_source',
       });
       expect(result).not.toBeNull();
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].content).toBe('Source content');
       expect((result as any).structuredContent.strategy).toBe('keep_source');
     });
@@ -644,9 +638,7 @@ describe('handleMemory', () => {
         strategy: 'combine',
       });
       expect(result).not.toBeNull();
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].content).toBe('Target content\n\nSource content');
       expect((result as any).structuredContent.strategy).toBe('combine');
     });
@@ -659,9 +651,7 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].importance).toBe(0.95);
     });
 
@@ -671,9 +661,7 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       // target has ['b', 'c'], source has ['a', 'b'] → union = ['b', 'c', 'a']
       expect(patchCall![2].tags).toEqual(['b', 'c', 'a']);
     });
@@ -686,9 +674,7 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].pinned).toBe(true);
     });
 
@@ -700,9 +686,7 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].immutable).toBe(true);
     });
 
@@ -712,9 +696,7 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].immutable).toBeUndefined();
     });
 
@@ -768,9 +750,7 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].tags).toEqual([]);
     });
 
@@ -783,9 +763,7 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find(
-        (c: any[]) => c[0] === 'PATCH',
-      );
+      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
       expect(patchCall![2].importance).toBe(0);
     });
 
