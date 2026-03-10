@@ -13,6 +13,8 @@ const SUGGESTED_CATEGORIES = ['stale', 'fresh', 'hot', 'decaying'];
 const RELATION_TYPES = ['related_to', 'derived_from', 'contradicts', 'supersedes', 'supports'];
 const SORT_FIELDS = ['created_at', 'updated_at', 'importance'];
 const SORT_ORDERS = ['asc', 'desc'];
+const EXPORT_FORMATS = ['json', 'jsonl'];
+const MERGE_STRATEGIES = ['keep_target', 'keep_source', 'combine'];
 
 /** Simple TTL cache for namespace and tag lists */
 interface CacheEntry<T> {
@@ -107,6 +109,16 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
     // Provide completions for 'order' argument (memoclaw_list, memoclaw_search)
     if (argName === 'order') {
       return { completion: filterValues(SORT_ORDERS, partial) };
+    }
+
+    // Provide completions for 'format' argument (memoclaw_export)
+    if (argName === 'format') {
+      return { completion: filterValues(EXPORT_FORMATS, partial) };
+    }
+
+    // Provide completions for 'strategy' argument (memoclaw_merge)
+    if (argName === 'strategy') {
+      return { completion: filterValues(MERGE_STRATEGIES, partial) };
     }
 
     // No completions available for this argument

@@ -175,4 +175,32 @@ describe('Completions', () => {
 
     expect(result.completion.values).toEqual([]);
   });
+
+  it('returns format completions', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'export' }, { name: 'format', value: 'js' });
+
+    expect(result.completion.values).toEqual(['json', 'jsonl']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns all format values when value is empty', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'export' }, { name: 'format', value: '' });
+
+    expect(result.completion.values).toEqual(['json', 'jsonl']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns strategy completions', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'merge' }, { name: 'strategy', value: 'keep' });
+
+    expect(result.completion.values).toEqual(['keep_target', 'keep_source']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns all strategy values when value is empty', async () => {
+    const result = await handleComplete({ type: 'ref/prompt', name: 'merge' }, { name: 'strategy', value: '' });
+
+    expect(result.completion.values).toEqual(['keep_target', 'keep_source', 'combine']);
+    expect(mockMakeRequest).not.toHaveBeenCalled();
+  });
 });

@@ -27,6 +27,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         include_relations,
         after,
         before,
+        pinned,
       } = args as RecallArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
@@ -43,6 +44,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (memory_type) filters.memory_type = memory_type;
       if (after) filters.after = after;
       if (before) filters.before = before;
+      if (pinned !== undefined) filters.pinned = pinned;
       const result = await makeRequest('POST', '/v1/recall', {
         query,
         limit,
