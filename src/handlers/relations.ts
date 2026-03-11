@@ -2,9 +2,20 @@ import { formatMemory, withConcurrency, userAndAssistantText, assistantText, use
 import { validateId, validateIdentifier } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import { throwIfCancelled } from './types.js';
-import type { CreateRelationArgs, ListRelationsArgs, DeleteRelationArgs, GraphArgs, Memory, Relation } from '../types.js';
+import type {
+  CreateRelationArgs,
+  ListRelationsArgs,
+  DeleteRelationArgs,
+  GraphArgs,
+  Memory,
+  Relation,
+} from '../types.js';
 
-export async function handleRelations(ctx: HandlerContext, name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
+export async function handleRelations(
+  ctx: HandlerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult | null> {
   const { makeRequest, config, signal } = ctx;
 
   switch (name) {

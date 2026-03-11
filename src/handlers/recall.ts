@@ -11,7 +11,11 @@ import {
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs, Memory } from '../types.js';
 
-export async function handleRecall(ctx: HandlerContext, name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
+export async function handleRecall(
+  ctx: HandlerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult | null> {
   const { makeRequest } = ctx;
 
   switch (name) {

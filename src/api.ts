@@ -48,7 +48,12 @@ export function createApiClient(config: Config) {
     return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
-  async function makeRequest(method: string, path: string, body?: Record<string, unknown>, externalSignal?: AbortSignal) {
+  async function makeRequest(
+    method: string,
+    path: string,
+    body?: Record<string, unknown>,
+    externalSignal?: AbortSignal,
+  ) {
     const url = `${apiUrl}${path}`;
     const { timeout, maxRetries } = config;
     let lastError: Error | null = null;

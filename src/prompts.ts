@@ -127,7 +127,9 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
         const memories = result.memories || result.data || [];
 
         const memoryList =
-          memories.length > 0 ? memories.map((m: Memory) => formatMemory(m)).join('\n\n') : '(no relevant memories found)';
+          memories.length > 0
+            ? memories.map((m: Memory) => formatMemory(m)).join('\n\n')
+            : '(no relevant memories found)';
 
         return {
           description: `Load context for: ${task}`,

@@ -130,7 +130,11 @@ async function bulkStoreWithFallback(
   };
 }
 
-export async function handleMemory(ctx: HandlerContext, name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
+export async function handleMemory(
+  ctx: HandlerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult | null> {
   const { makeRequest, config, progress, signal } = ctx;
 
   switch (name) {
@@ -506,7 +510,8 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: Reco
     }
 
     case 'memoclaw_count': {
-      const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned, metadata } = args as unknown as CountArgs;
+      const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned, metadata } =
+        args as unknown as CountArgs;
       validateISODate(after, 'after');
       validateISODate(before, 'before');
       validateMetadata(metadata);

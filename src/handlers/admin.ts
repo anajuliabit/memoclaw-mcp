@@ -28,7 +28,11 @@ import type {
   FileEntry,
 } from '../types.js';
 
-export async function handleAdmin(ctx: HandlerContext, name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
+export async function handleAdmin(
+  ctx: HandlerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult | null> {
   const { makeRequest, account, config, progress, signal } = ctx;
 
   switch (name) {
