@@ -355,7 +355,14 @@ export async function handleMemory(
         }
         validateContentLength(m.content, `Memory at index ${i}`);
         validateImportance(m.importance, `Memory at index ${i} importance`);
+        validateTags(m.tags, `Memory at index ${i} tags`);
+        validateMetadata(m.metadata, `Memory at index ${i} metadata`);
+        validateIdentifier(m.namespace, `Memory at index ${i} namespace`);
+        validateIdentifier(m.memory_type, `Memory at index ${i} memory_type`);
+        validateISODate(m.expires_at, `Memory at index ${i} expires_at`);
       }
+      if (session_id) validateIdentifier(session_id, 'session_id');
+      if (agent_id) validateIdentifier(agent_id, 'agent_id');
       return bulkStoreWithFallback(
         ctx,
         memories as unknown as Array<Record<string, unknown>>,
@@ -378,7 +385,14 @@ export async function handleMemory(
         }
         validateContentLength(m.content, `Memory at index ${i}`);
         validateImportance(m.importance, `Memory at index ${i} importance`);
+        validateTags(m.tags, `Memory at index ${i} tags`);
+        validateMetadata(m.metadata, `Memory at index ${i} metadata`);
+        validateIdentifier(m.namespace, `Memory at index ${i} namespace`);
+        validateIdentifier(m.memory_type, `Memory at index ${i} memory_type`);
+        validateISODate(m.expires_at, `Memory at index ${i} expires_at`);
       }
+      if (session_id) validateIdentifier(session_id, 'session_id');
+      if (agent_id) validateIdentifier(agent_id, 'agent_id');
       return bulkStoreWithFallback(
         ctx,
         memories as unknown as Array<Record<string, unknown>>,
@@ -428,6 +442,10 @@ export async function handleMemory(
         if (!u.id) throw new Error(`Update at index ${i} is missing "id"`);
         validateImportance(u.importance, `Update at index ${i} importance`);
         validateTags(u.tags, `Update at index ${i} tags`);
+        validateMetadata(u.metadata, `Update at index ${i} metadata`);
+        validateIdentifier(u.namespace, `Update at index ${i} namespace`);
+        validateIdentifier(u.memory_type, `Update at index ${i} memory_type`);
+        validateISODate(u.expires_at, `Update at index ${i} expires_at`);
       }
       try {
         const result = await makeRequest('POST', '/v1/memories/batch-update', { updates });
