@@ -128,6 +128,33 @@ export function validateSimilarity(value: unknown, label = 'min_similarity'): nu
   return value;
 }
 
+/** Maximum number of top-level keys in a metadata object */
+const MAX_METADATA_KEYS = 50;
+
+/** Maximum serialised size for a metadata object (bytes) */
+const MAX_METADATA_SIZE = 8192;
+
+/**
+ * Validate a metadata parameter.
+ * Must be a plain object (not null, not an array, not a primitive).
+ * Returns undefined if value is falsy (optional params), throws on invalid.
+ */
+export function validateMetadata(value: unknown, label = 'metadata'): Record<string, unknown> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be a plain object`);
+  }
+  const keys = Object.keys(value as Record<string, unknown>);
+  if (keys.length > MAX_METADATA_KEYS) {
+    throw new Error(`${label} has too many keys (${keys.length}). Maximum is ${MAX_METADATA_KEYS}.`);
+  }
+  const serialised = JSON.stringify(value);
+  if (serialised.length > MAX_METADATA_SIZE) {
+    throw new Error(`${label} is too large (${serialised.length} bytes). Maximum is ${MAX_METADATA_SIZE} bytes.`);
+  }
+  return value as Record<string, unknown>;
+}
+
 /**
  * Validate an ISO 8601 date string parameter (expires_at, after, before).
  * Returns undefined if value is falsy (optional params), throws on invalid.

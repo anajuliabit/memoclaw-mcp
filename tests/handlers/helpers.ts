@@ -53,4 +53,5 @@ export const testConfig: Config = {
   configSource: 'test',
   timeout: 5000,
   maxRetries: 0,
+  concurrency: 10,
 };

@@ -9,6 +9,7 @@ const mockConfig: Config = {
   configSource: 'test',
   timeout: 5000,
   maxRetries: 0,
+  concurrency: 10,
 };
 
 describe('Completions', () => {

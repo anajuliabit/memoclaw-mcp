@@ -360,7 +360,7 @@ export async function handleAdmin(ctx: HandlerContext, name: string, args: any):
         if (toDelete.length === 0) break;
         const deleteResults = await withConcurrency(
           toDelete.map((m: any) => () => makeRequest('DELETE', `/v1/memories/${m.id}`)),
-          10,
+          config.concurrency,
           signal,
         );
         let pageSuccesses = 0;

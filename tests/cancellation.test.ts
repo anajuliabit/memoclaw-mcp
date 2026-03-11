@@ -12,6 +12,9 @@ const testConfig = {
   privateKey: '0x0000000000000000000000000000000000000000000000000000000000000001',
   apiUrl: 'http://localhost:9999',
   configSource: 'test' as const,
+  timeout: 5000,
+  maxRetries: 0,
+  concurrency: 10,
 };
 
 function mockApi(routeResponses: Record<string, any>) {
