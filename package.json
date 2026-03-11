@@ -51,5 +51,8 @@
     "type": "git",
     "url": "https://github.com/anajuliabit/memoclaw-mcp"
   },
-  "mcpName": "io.github.anajuliabit/memoclaw-mcp"
+  "mcpName": "io.github.anajuliabit/memoclaw-mcp",
+  "overrides": {
+    "hono": "^4.12.7"
+  }
 }
