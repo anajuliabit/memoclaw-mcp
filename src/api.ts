@@ -48,7 +48,7 @@ export function createApiClient(config: Config) {
     return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
-  async function makeRequest(method: string, path: string, body?: any, externalSignal?: AbortSignal) {
+  async function makeRequest(method: string, path: string, body?: Record<string, unknown>, externalSignal?: AbortSignal) {
     const url = `${apiUrl}${path}`;
     const { timeout, maxRetries } = config;
     let lastError: Error | null = null;
@@ -148,25 +148,27 @@ export function createApiClient(config: Config) {
         }
 
         return res.json();
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Clean up listeners on error paths
         if (onExternalAbort) externalSignal!.removeEventListener('abort', onExternalAbort);
 
+        const errObj = err instanceof Error ? err : new Error(String(err));
+
         // If the external signal caused the abort, surface it as cancellation (no retry)
-        if (err.name === 'AbortError' && externalSignal?.aborted) {
+        if (errObj.name === 'AbortError' && externalSignal?.aborted) {
           const cancelErr = new Error('Operation cancelled by client');
           cancelErr.name = 'CancellationError';
           throw cancelErr;
         }
 
         // Retry on network errors and timeouts (but not client errors)
-        if (err.name === 'AbortError') {
+        if (errObj.name === 'AbortError') {
           lastError = new Error(`Request timed out after ${timeout}ms`);
-        } else if (err.message?.startsWith('HTTP 4')) {
+        } else if (errObj.message?.startsWith('HTTP 4')) {
           // Don't retry 4xx (except transient ones handled above)
-          throw err;
+          throw errObj;
         } else {
-          lastError = err;
+          lastError = errObj;
         }
 
         if (attempt >= maxRetries) {

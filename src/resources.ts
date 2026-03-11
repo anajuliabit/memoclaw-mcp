@@ -110,7 +110,7 @@ export function createResourceHandler(api: ApiClient, _config: Config) {
       }
 
       case 'memoclaw://namespaces': {
-        let namespaces: any[];
+        let namespaces: Array<{ namespace: string; count?: number }>;
         try {
           const result = await makeRequest('GET', '/v1/namespaces');
           namespaces = result.namespaces || [];

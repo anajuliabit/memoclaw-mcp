@@ -310,6 +310,84 @@ export interface MigrateArgs {
   dry_run?: boolean;
 }
 
+// ── API response shapes ──────────────────────────────────────────────────────
+// These type the JSON objects returned by the MemoClaw REST API so that handler
+// code can stop using `any` for API results.
+
+/** A memory object as returned by the API. */
+export interface Memory {
+  id: string;
+  content: string;
+  importance?: number;
+  similarity?: number;
+  memory_type?: string;
+  namespace?: string;
+  tags?: string[];
+  pinned?: boolean;
+  immutable?: boolean;
+  expires_at?: string;
+  metadata?: Record<string, unknown>;
+  access_count?: number;
+  last_accessed?: string;
+  created_at?: string;
+  updated_at?: string;
+  session_id?: string;
+  agent_id?: string;
+  [key: string]: unknown;
+}
+
+/** A relation between two memories. */
+export interface Relation {
+  id?: string;
+  source_id?: string;
+  target_id: string;
+  relation_type: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Namespace entry with optional count. */
+export interface NamespaceInfo {
+  namespace: string;
+  name?: string;
+  count?: number;
+}
+
+/** Tag entry with optional count. */
+export interface TagInfo {
+  tag: string;
+  name?: string;
+  count?: number;
+}
+
+/** A single version in memory edit history. */
+export interface HistoryEntry {
+  content?: string;
+  importance?: number;
+  tags?: string[];
+  memory_type?: string;
+  namespace?: string;
+  pinned?: boolean;
+  immutable?: boolean;
+  changed_at?: string;
+  updated_at?: string;
+  created_at?: string;
+  changed_fields?: string[] | string;
+  [key: string]: unknown;
+}
+
+/** Item in a batch failure list. */
+export interface FailedItem {
+  id?: string;
+  index?: number;
+  error?: string;
+}
+
+/** File entry for migration. */
+export interface FileEntry {
+  filename: string;
+  content: string;
+}
+
 // ── Union type for dispatch ──────────────────────────────────────────────────
 
 export type ToolArgs =

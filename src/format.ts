@@ -1,8 +1,10 @@
+import type { Memory } from './types.js';
+
 /**
  * Format a memory object for human-readable display.
  * Handles missing/malformed fields gracefully.
  */
-export function formatMemory(m: any): string {
+export function formatMemory(m: Partial<Memory> | null | undefined): string {
   if (!m) return '(empty memory)';
   const parts = [`📝 ${m.content || '(no content)'}`];
   if (m.id) parts.push(`  id: ${m.id}`);
@@ -12,8 +14,8 @@ export function formatMemory(m: any): string {
   if (m.importance !== undefined && m.importance !== null) parts.push(`  importance: ${m.importance}`);
   if (m.memory_type) parts.push(`  type: ${m.memory_type}`);
   if (m.namespace) parts.push(`  namespace: ${m.namespace}`);
-  const tags = m.tags || m.metadata?.tags;
-  if (tags?.length) parts.push(`  tags: ${tags.join(', ')}`);
+  const tags = m.tags || (m.metadata?.tags as string[] | undefined);
+  if (Array.isArray(tags) && tags.length) parts.push(`  tags: ${tags.join(', ')}`);
   if (m.pinned) parts.push(`  📌 pinned`);
   if (m.immutable) parts.push(`  🔒 immutable`);
   if (m.expires_at) parts.push(`  expires: ${m.expires_at}`);
@@ -53,7 +55,7 @@ export async function withConcurrency<T>(
       const i = idx++;
       try {
         results[i] = { status: 'fulfilled', value: await tasks[i]() };
-      } catch (reason: any) {
+      } catch (reason: unknown) {
         results[i] = { status: 'rejected', reason };
       }
     }

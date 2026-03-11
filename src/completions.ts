@@ -35,7 +35,9 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
     try {
       const result = await makeRequest('GET', '/v1/namespaces');
       const namespaces = (result.namespaces || [])
-        .map((ns: any) => (typeof ns === 'string' ? ns : ns.namespace || ns.name))
+        .map((ns: string | { namespace?: string; name?: string }) =>
+          typeof ns === 'string' ? ns : ns.namespace || ns.name,
+        )
         .filter(Boolean);
       nsCache = { data: namespaces, expiry: Date.now() + CACHE_TTL };
       return namespaces;
@@ -48,7 +50,9 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
     if (tagCache && Date.now() < tagCache.expiry) return tagCache.data;
     try {
       const result = await makeRequest('GET', '/v1/tags');
-      const tags = (result.tags || []).map((t: any) => (typeof t === 'string' ? t : t.tag || t.name)).filter(Boolean);
+      const tags = (result.tags || [])
+        .map((t: string | { tag?: string; name?: string }) => (typeof t === 'string' ? t : t.tag || t.name))
+        .filter(Boolean);
       tagCache = { data: tags, expiry: Date.now() + CACHE_TTL };
       return tags;
     } catch {

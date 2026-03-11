@@ -32,6 +32,9 @@ import type {
   BatchUpdateArgs,
   CountArgs,
   MergeArgs,
+  Memory,
+  FailedItem,
+  BatchUpdateEntry,
 } from '../types.js';
 
 /**
@@ -40,7 +43,7 @@ import type {
  */
 async function bulkStoreWithFallback(
   ctx: HandlerContext,
-  memories: any[],
+  memories: Array<Record<string, unknown>>,
   fields: string[],
   prefix: string,
   session_id?: string,
@@ -51,9 +54,9 @@ async function bulkStoreWithFallback(
 
   // Try batch API endpoint first (single request)
   try {
-    const batchBody: any = {
-      memories: memories.map((m: any) => {
-        const item: any = {};
+    const batchBody: Record<string, unknown> = {
+      memories: memories.map((m) => {
+        const item: Record<string, unknown> = {};
         for (const key of fields) {
           if (m[key] !== undefined) item[key] = m[key];
         }
@@ -63,23 +66,24 @@ async function bulkStoreWithFallback(
       }),
     };
     const result = await makeRequest('POST', '/v1/store/batch', batchBody);
-    const stored = result.memories || result.data || [];
-    const failedItems = result.failed || [];
+    const stored: Memory[] = result.memories || result.data || [];
+    const failedItems: FailedItem[] = result.failed || [];
     const errors: string[] = [];
     let text = `${prefix}: ${stored.length} stored, ${failedItems.length} failed`;
-    if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
+    if (stored.length > 0) text += `\n\n${stored.map((m) => formatMemory(m)).join('\n\n')}`;
     if (failedItems.length > 0) {
       for (const f of failedItems) errors.push(`index ${f.index ?? '?'}: ${f.error || 'unknown error'}`);
       text += `\n\nErrors:\n${errors.join('\n')}`;
     }
-    const resourceLinks = stored.filter((m: any) => m.id).map((m: any) => memoryResourceLink(m.id, resourceLinkName));
+    const resourceLinks = stored.filter((m) => m.id).map((m) => memoryResourceLink(m.id, resourceLinkName));
     return {
       content: [userAndAssistantText(text), ...resourceLinks],
       structuredContent: { succeeded: stored.length, failed: failedItems.length, memories: stored, errors },
     };
-  } catch (batchErr: any) {
+  } catch (batchErr: unknown) {
     // Fall back to one-by-one if batch endpoint is unavailable (404)
-    if (!batchErr.message?.includes('404') && !batchErr.message?.includes('Not Found')) {
+    const errMsg = batchErr instanceof Error ? batchErr.message : String(batchErr);
+    if (!errMsg.includes('404') && !errMsg.includes('Not Found')) {
       throw batchErr;
     }
   }
@@ -87,8 +91,8 @@ async function bulkStoreWithFallback(
   // Fallback: store one-by-one with concurrency
   let storeProgress = 0;
   const results = await withConcurrency(
-    memories.map((m: any) => async () => {
-      const body: any = {};
+    memories.map((m) => async () => {
+      const body: Record<string, unknown> = {};
       for (const key of fields) {
         if (m[key] !== undefined) body[key] = m[key];
       }
@@ -104,9 +108,11 @@ async function bulkStoreWithFallback(
   );
   const succeeded = results.filter((r) => r?.status === 'fulfilled');
   const failed = results.filter((r) => r?.status === 'rejected');
-  const stored = succeeded.map(
-    (r) => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value,
-  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response shape is dynamic
+  const stored: Memory[] = succeeded.map((r) => {
+    const val = (r as PromiseFulfilledResult<Record<string, unknown>>).value;
+    return (val?.memory ?? val) as Memory;
+  });
   const errors = failed.map((r) => {
     const idx = results.indexOf(r);
     return `index ${idx}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
@@ -115,16 +121,16 @@ async function bulkStoreWithFallback(
   let text = cancelled
     ? `⚠️ ${prefix} cancelled: ${succeeded.length} of ${memories.length} stored, ${failed.length} failed`
     : `${prefix}: ${succeeded.length} stored, ${failed.length} failed`;
-  if (stored.length > 0) text += `\n\n${stored.map((m: any) => formatMemory(m)).join('\n\n')}`;
+  if (stored.length > 0) text += `\n\n${stored.map((m) => formatMemory(m)).join('\n\n')}`;
   if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
-  const resourceLinks = stored.filter((m: any) => m?.id).map((m: any) => memoryResourceLink(m.id, resourceLinkName));
+  const resourceLinks = stored.filter((m) => m?.id).map((m) => memoryResourceLink(m.id, resourceLinkName));
   return {
     content: [userAndAssistantText(text), ...resourceLinks],
     structuredContent: { succeeded: succeeded.length, failed: failed.length, memories: stored, errors, cancelled },
   };
 }
 
-export async function handleMemory(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
+export async function handleMemory(ctx: HandlerContext, name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
   const { makeRequest, config, progress, signal } = ctx;
 
   switch (name) {
@@ -141,7 +147,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         pinned,
         immutable,
         metadata,
-      } = args as StoreArgs;
+      } = args as unknown as StoreArgs;
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
@@ -154,7 +160,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(agent_id, 'agent_id');
       validateISODate(expires_at, 'expires_at');
       validateMetadata(metadata);
-      const body: any = { content };
+      const body: Record<string, unknown> = { content };
       if (importance !== undefined) body.importance = importance;
       if (tags) body.tags = tags;
       if (namespace) body.namespace = namespace;
@@ -178,7 +184,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_get': {
-      const { id } = args as GetArgs;
+      const { id } = args as unknown as GetArgs;
       validateId(id, 'id');
       const result = await makeRequest('GET', `/v1/memories/${id}`);
       const memory = result.memory || result;
@@ -203,7 +209,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         order,
         pinned,
         metadata,
-      } = args as ListArgs;
+      } = args as unknown as ListArgs;
       validatePaginationParam(limit, 'limit');
       validatePaginationParam(offset, 'offset');
       validateTags(tags);
@@ -231,7 +237,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       const result = await makeRequest('GET', `/v1/memories?${params}`);
       const memories = result.memories || result.data || [];
       const total = result.total ?? memories.length;
-      const formatted = memories.length > 0 ? '\n\n' + memories.map((m: any) => formatMemory(m)).join('\n\n') : '';
+      const formatted = memories.length > 0 ? '\n\n' + memories.map((m: Memory) => formatMemory(m)).join('\n\n') : '';
       return {
         content: [
           userAndAssistantText(`Showing ${memories.length} of ${total} memories${formatted}`),
@@ -242,9 +248,9 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_update': {
-      const { id, ...allFields } = args as UpdateArgs;
+      const { id, ...allFields } = args as unknown as UpdateArgs;
       validateId(id, 'id');
-      const updateFields: Record<string, any> = {};
+      const updateFields: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(allFields)) {
         if (UPDATE_FIELDS.has(key) && value !== undefined) updateFields[key] = value;
       }
@@ -272,7 +278,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_delete': {
-      const { id } = args as DeleteArgs;
+      const { id } = args as unknown as DeleteArgs;
       validateId(id, 'id');
       const result = await makeRequest('DELETE', `/v1/memories/${id}`);
       return {
@@ -282,7 +288,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_bulk_delete': {
-      const { ids } = args as BulkDeleteArgs;
+      const { ids } = args as unknown as BulkDeleteArgs;
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
         throw new Error('ids is required and must be a non-empty array');
       }
@@ -297,7 +303,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         succeeded = result.deleted ?? ids.length;
         failed = (result.failed && result.failed.length) || 0;
         if (result.failed && result.failed.length > 0) {
-          errors = result.failed.map((f: any) => `${f.id}: ${f.error || 'unknown error'}`);
+          errors = result.failed.map((f: FailedItem) => `${f.id}: ${f.error || 'unknown error'}`);
         }
       } catch {
         // Fallback: delete one-by-one
@@ -335,7 +341,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_bulk_store': {
-      const { memories, session_id, agent_id } = args as BulkStoreArgs;
+      const { memories, session_id, agent_id } = args as unknown as BulkStoreArgs;
       if (!memories || !Array.isArray(memories) || memories.length === 0) {
         throw new Error('memories is required and must be a non-empty array');
       }
@@ -349,7 +355,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       }
       return bulkStoreWithFallback(
         ctx,
-        memories,
+        memories as unknown as Array<Record<string, unknown>>,
         ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'expires_at', 'immutable', 'metadata'],
         '✅ Bulk store',
         session_id,
@@ -358,7 +364,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_import': {
-      const { memories, session_id, agent_id } = args as ImportArgs;
+      const { memories, session_id, agent_id } = args as unknown as ImportArgs;
       if (!memories || !Array.isArray(memories) || memories.length === 0) {
         throw new Error('memories is required and must be a non-empty array');
       }
@@ -372,7 +378,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       }
       return bulkStoreWithFallback(
         ctx,
-        memories,
+        memories as unknown as Array<Record<string, unknown>>,
         ['content', 'importance', 'tags', 'namespace', 'memory_type', 'pinned', 'immutable', 'expires_at', 'metadata'],
         '📥 Import',
         session_id,
@@ -382,7 +388,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_pin': {
-      const { id } = args as PinArgs;
+      const { id } = args as unknown as PinArgs;
       validateId(id, 'id');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: true });
       const memory = result.memory || result;
@@ -396,7 +402,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_unpin': {
-      const { id } = args as UnpinArgs;
+      const { id } = args as unknown as UnpinArgs;
       validateId(id, 'id');
       const result = await makeRequest('PATCH', `/v1/memories/${id}`, { pinned: false });
       const memory = result.memory || result;
@@ -410,7 +416,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_batch_update': {
-      const { updates } = args as BatchUpdateArgs;
+      const { updates } = args as unknown as BatchUpdateArgs;
       if (!updates || !Array.isArray(updates) || updates.length === 0) {
         throw new Error('updates is required and must be a non-empty array');
       }
@@ -425,10 +431,10 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
         const updated = result.updated ?? result.memories?.length ?? '?';
         const memories = result.memories || [];
         let text = `✅ Batch update: ${updated} memories updated`;
-        if (memories.length > 0) text += `\n\n${memories.map((m: any) => formatMemory(m)).join('\n\n')}`;
+        if (memories.length > 0) text += `\n\n${memories.map((m: Memory) => formatMemory(m)).join('\n\n')}`;
         const batchResourceLinks = memories
-          .filter((m: any) => m.id)
-          .map((m: any) => memoryResourceLink(m.id, 'Updated memory'));
+          .filter((m: Memory) => m.id)
+          .map((m: Memory) => memoryResourceLink(m.id, 'Updated memory'));
         return {
           content: [userAndAssistantText(text), assistantText(JSON.stringify(result, null, 2)), ...batchResourceLinks],
           structuredContent: {
@@ -438,8 +444,9 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
             errors: [],
           },
         };
-      } catch (err: any) {
-        if (err.message?.includes('404') || err.message?.includes('Not Found')) {
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes('404') || errMsg.includes('Not Found')) {
           // Validate fields before sending individual requests (mirrors memoclaw_update validation)
           for (const u of updates) {
             if (typeof u.content === 'string') validateContentLength(u.content);
@@ -450,13 +457,13 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           }
           let updateProgress = 0;
           const results = await withConcurrency(
-            updates.map((u: any) => async () => {
+            updates.map((u: BatchUpdateEntry) => async () => {
               const { id, ...fields } = u;
-              const updateFields: Record<string, any> = {};
+              const updateBody: Record<string, unknown> = {};
               for (const [key, value] of Object.entries(fields)) {
-                if (UPDATE_FIELDS.has(key) && value !== undefined) updateFields[key] = value;
+                if (UPDATE_FIELDS.has(key) && value !== undefined) updateBody[key] = value;
               }
-              const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateFields);
+              const result = await makeRequest('PATCH', `/v1/memories/${id}`, updateBody);
               updateProgress++;
               await progress(updateProgress, updates.length);
               return result;
@@ -466,9 +473,10 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           );
           const succeeded = results.filter((r) => r?.status === 'fulfilled');
           const failed = results.filter((r) => r?.status === 'rejected');
-          const memories = succeeded.map(
-            (r) => (r as PromiseFulfilledResult<any>).value?.memory || (r as PromiseFulfilledResult<any>).value,
-          );
+          const memories: Memory[] = succeeded.map((r) => {
+            const val = (r as PromiseFulfilledResult<Record<string, unknown>>).value;
+            return (val?.memory ?? val) as Memory;
+          });
           const errors = failed.map((r) => {
             const idx = results.indexOf(r);
             return `${updates[idx]?.id}: ${(r as PromiseRejectedResult).reason?.message || 'unknown error'}`;
@@ -477,11 +485,11 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
           let text = batchCancelled
             ? `⚠️ Batch update cancelled: ${succeeded.length} of ${updates.length} updated, ${failed.length} failed`
             : `✅ Batch update: ${succeeded.length} updated, ${failed.length} failed`;
-          if (memories.length > 0) text += `\n\n${memories.map((m: any) => formatMemory(m)).join('\n\n')}`;
+          if (memories.length > 0) text += `\n\n${memories.map((m) => formatMemory(m)).join('\n\n')}`;
           if (errors.length > 0) text += `\n\nErrors:\n${errors.join('\n')}`;
           const fallbackResourceLinks = updates
-            .filter((_u: any, i: number) => results[i]?.status === 'fulfilled')
-            .map((u: any) => memoryResourceLink(u.id, 'Updated memory'));
+            .filter((_u: BatchUpdateEntry, i: number) => results[i]?.status === 'fulfilled')
+            .map((u: BatchUpdateEntry) => memoryResourceLink(u.id, 'Updated memory'));
           return {
             content: [userAndAssistantText(text), ...fallbackResourceLinks],
             structuredContent: {
@@ -498,7 +506,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_count': {
-      const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned, metadata } = args as CountArgs;
+      const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned, metadata } = args as unknown as CountArgs;
       validateISODate(after, 'after');
       validateISODate(before, 'before');
       validateMetadata(metadata);
@@ -573,7 +581,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_merge': {
-      const { source_id, target_id, strategy = 'keep_target' } = args as MergeArgs;
+      const { source_id, target_id, strategy = 'keep_target' } = args as unknown as MergeArgs;
       validateId(source_id, 'source_id');
       validateId(target_id, 'target_id');
       if (source_id === target_id) {
@@ -622,7 +630,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       const mergedImmutable = !!(source.immutable || target.immutable);
 
       // Build update payload
-      const updateBody: Record<string, any> = {
+      const updateBody: Record<string, unknown> = {
         content: mergedContent,
         importance: mergedImportance,
         tags: mergedTags,
