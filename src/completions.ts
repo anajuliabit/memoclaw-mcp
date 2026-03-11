@@ -72,7 +72,7 @@ export function createCompletionHandler(api: ApiClient, _config: Config) {
   }
 
   return async function handleComplete(
-    ref: { type: string; name?: string; uri?: string },
+    _ref: { type: string; name?: string; uri?: string },
     argument: { name: string; value: string },
   ): Promise<{ completion: { values: string[]; total?: number; hasMore?: boolean } }> {
     const argName = argument.name;
