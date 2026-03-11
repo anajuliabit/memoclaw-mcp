@@ -6,6 +6,7 @@ import {
   validateQuery,
   validateISODate,
   validatePaginationParam,
+  validateMetadata,
 } from '../src/validate.js';
 
 describe('validateIdentifier', () => {
@@ -197,5 +198,58 @@ describe('validateSimilarity', () => {
     expect(() => validateSimilarity(-0.1)).toThrow('must be between 0.0 and 1.0');
     expect(() => validateSimilarity(1.1)).toThrow('must be between 0.0 and 1.0');
     expect(() => validateSimilarity(5)).toThrow('must be between 0.0 and 1.0');
+  });
+});
+
+describe('validateMetadata', () => {
+  it('returns undefined for undefined/null', () => {
+    expect(validateMetadata(undefined)).toBeUndefined();
+    expect(validateMetadata(null)).toBeUndefined();
+  });
+
+  it('accepts a valid plain object', () => {
+    const obj = { key: 'value', nested: { a: 1 } };
+    expect(validateMetadata(obj)).toEqual(obj);
+  });
+
+  it('accepts an empty object', () => {
+    expect(validateMetadata({})).toEqual({});
+  });
+
+  it('rejects arrays', () => {
+    expect(() => validateMetadata([1, 2, 3])).toThrow('must be a plain object');
+  });
+
+  it('rejects strings', () => {
+    expect(() => validateMetadata('not an object')).toThrow('must be a plain object');
+  });
+
+  it('rejects numbers', () => {
+    expect(() => validateMetadata(42)).toThrow('must be a plain object');
+  });
+
+  it('rejects booleans', () => {
+    expect(() => validateMetadata(true)).toThrow('must be a plain object');
+  });
+
+  it('rejects objects with too many keys', () => {
+    const bigObj: Record<string, number> = {};
+    for (let i = 0; i < 51; i++) bigObj[`key${i}`] = i;
+    expect(() => validateMetadata(bigObj)).toThrow('too many keys');
+  });
+
+  it('accepts objects at the key limit', () => {
+    const obj: Record<string, number> = {};
+    for (let i = 0; i < 50; i++) obj[`key${i}`] = i;
+    expect(validateMetadata(obj)).toEqual(obj);
+  });
+
+  it('rejects objects that are too large when serialised', () => {
+    const bigObj = { data: 'x'.repeat(9000) };
+    expect(() => validateMetadata(bigObj)).toThrow('too large');
+  });
+
+  it('uses custom label in error messages', () => {
+    expect(() => validateMetadata('bad', 'custom_field')).toThrow('custom_field must be a plain object');
   });
 });

@@ -10,6 +10,8 @@ export interface Config {
   timeout: number;
   /** Max retries for transient failures (default: 3) */
   maxRetries: number;
+  /** Concurrency limit for bulk operations (default: 10) */
+  concurrency: number;
 }
 
 /**
@@ -51,5 +53,8 @@ export function loadConfig(): Config {
   const parsedRetries = parseInt(process.env.MEMOCLAW_MAX_RETRIES || '', 10);
   const maxRetries = Number.isNaN(parsedRetries) ? 3 : parsedRetries;
 
-  return { privateKey, apiUrl, configSource, timeout, maxRetries };
+  const parsedConcurrency = parseInt(process.env.MEMOCLAW_CONCURRENCY || '', 10);
+  const concurrency = Number.isNaN(parsedConcurrency) || parsedConcurrency < 1 ? 10 : parsedConcurrency;
+
+  return { privateKey, apiUrl, configSource, timeout, maxRetries, concurrency };
 }

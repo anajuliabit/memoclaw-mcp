@@ -9,7 +9,14 @@ import {
   userText,
   memoryResourceLink,
 } from '../format.js';
-import { validateIdentifier, validateId, validateTags, validateISODate, validatePaginationParam } from '../validate.js';
+import {
+  validateIdentifier,
+  validateId,
+  validateTags,
+  validateISODate,
+  validatePaginationParam,
+  validateMetadata,
+} from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
   StoreArgs,
@@ -92,7 +99,7 @@ async function bulkStoreWithFallback(
       await progress(storeProgress, memories.length);
       return result;
     }),
-    10,
+    ctx.config.concurrency,
     signal,
   );
   const succeeded = results.filter((r) => r?.status === 'fulfilled');
@@ -118,7 +125,7 @@ async function bulkStoreWithFallback(
 }
 
 export async function handleMemory(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
-  const { makeRequest, progress, signal } = ctx;
+  const { makeRequest, config, progress, signal } = ctx;
 
   switch (name) {
     case 'memoclaw_store': {
@@ -146,6 +153,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
       validateISODate(expires_at, 'expires_at');
+      validateMetadata(metadata);
       const body: any = { content };
       if (importance !== undefined) body.importance = importance;
       if (tags) body.tags = tags;
@@ -205,6 +213,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(agent_id, 'agent_id');
       validateISODate(after, 'after');
       validateISODate(before, 'before');
+      validateMetadata(metadata);
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (offset !== undefined) params.set('offset', String(offset));
@@ -300,7 +309,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
             await progress(deleteProgress, ids.length);
             return result;
           }),
-          10,
+          config.concurrency,
           signal,
         );
         succeeded = results.filter((r) => r?.status === 'fulfilled').length;
@@ -452,7 +461,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
               await progress(updateProgress, updates.length);
               return result;
             }),
-            10,
+            config.concurrency,
             signal,
           );
           const succeeded = results.filter((r) => r?.status === 'fulfilled');
@@ -492,6 +501,7 @@ export async function handleMemory(ctx: HandlerContext, name: string, args: any)
       const { namespace, tags, agent_id, memory_type, session_id, before, after, pinned, metadata } = args as CountArgs;
       validateISODate(after, 'after');
       validateISODate(before, 'before');
+      validateMetadata(metadata);
       const params = new URLSearchParams();
       if (namespace) params.set('namespace', namespace);
       if (tags && Array.isArray(tags) && tags.length > 0) params.set('tags', tags.join(','));

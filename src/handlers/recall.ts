@@ -6,6 +6,7 @@ import {
   validateISODate,
   validatePaginationParam,
   validateSimilarity,
+  validateMetadata,
 } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
@@ -40,6 +41,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(agent_id, 'agent_id');
       validateISODate(after, 'after');
       validateISODate(before, 'before');
+      validateMetadata(metadata);
       const filters: Record<string, any> = {};
       if (tags) filters.tags = tags;
       if (memory_type) filters.memory_type = memory_type;
@@ -99,6 +101,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(agent_id, 'agent_id');
       validateISODate(after, 'after');
       validateISODate(before, 'before');
+      validateMetadata(metadata);
       const params = new URLSearchParams();
       params.set('q', query);
       if (limit !== undefined) params.set('limit', String(limit));

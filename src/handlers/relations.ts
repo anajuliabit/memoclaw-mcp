@@ -5,7 +5,7 @@ import { throwIfCancelled } from './types.js';
 import type { CreateRelationArgs, ListRelationsArgs, DeleteRelationArgs, GraphArgs } from '../types.js';
 
 export async function handleRelations(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
-  const { makeRequest, signal } = ctx;
+  const { makeRequest, config, signal } = ctx;
 
   switch (name) {
     case 'memoclaw_create_relation': {
@@ -94,7 +94,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
                 .then((mem) => ({ id: mid, data: mem.memory || mem }))
                 .catch(() => ({ id: mid, data: { id: mid, content: '(could not fetch)' } })),
           ),
-          10,
+          config.concurrency,
           signal,
         );
         for (const r of memResults) {
@@ -110,7 +110,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
                   .then((relResult) => ({ id: mid, relations: relResult.relations || [] }))
                   .catch(() => ({ id: mid, relations: [] as any[] })),
             ),
-            10,
+            config.concurrency,
             signal,
           );
           for (const r of relResults) {
