@@ -108,7 +108,6 @@ async function bulkStoreWithFallback(
   );
   const succeeded = results.filter((r) => r?.status === 'fulfilled');
   const failed = results.filter((r) => r?.status === 'rejected');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response shape is dynamic
   const stored: Memory[] = succeeded.map((r) => {
     const val = (r as PromiseFulfilledResult<Record<string, unknown>>).value;
     return (val?.memory ?? val) as Memory;
