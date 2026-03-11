@@ -8,6 +8,7 @@
 import type { ApiClient } from './api.js';
 import type { Config } from './config.js';
 import { formatMemory } from './format.js';
+import type { Memory, NamespaceInfo } from './types.js';
 
 /** Prompt definitions returned by prompts/list */
 export const PROMPTS = [
@@ -91,7 +92,7 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
 
         const nsLabel = namespace ? `namespace "${namespace}"` : 'default namespace';
         const memoryList =
-          memories.length > 0 ? memories.map((m: any) => formatMemory(m)).join('\n\n') : '(no memories found)';
+          memories.length > 0 ? memories.map((m: Memory) => formatMemory(m)).join('\n\n') : '(no memories found)';
 
         return {
           description: `Review memories in ${nsLabel}`,
@@ -119,14 +120,16 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
         if (!task) throw new Error('task argument is required');
         const namespace = args?.namespace;
 
-        const body: any = { query: task, limit: 20 };
+        const body: Record<string, unknown> = { query: task, limit: 20 };
         if (namespace) body.namespace = namespace;
 
         const result = await makeRequest('POST', '/v1/recall', body);
         const memories = result.memories || result.data || [];
 
         const memoryList =
-          memories.length > 0 ? memories.map((m: any) => formatMemory(m)).join('\n\n') : '(no relevant memories found)';
+          memories.length > 0
+            ? memories.map((m: Memory) => formatMemory(m)).join('\n\n')
+            : '(no relevant memories found)';
 
         return {
           description: `Load context for: ${task}`,
@@ -157,7 +160,7 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
         const stats = await makeRequest('GET', '/v1/stats');
 
         // Fetch namespaces
-        let namespaces: any[] = [];
+        let namespaces: NamespaceInfo[] = [];
         try {
           const nsResult = await makeRequest('GET', '/v1/namespaces');
           namespaces = nsResult.namespaces || [];
@@ -178,14 +181,14 @@ export function createPromptHandler(api: ApiClient, _config: Config) {
         const statsText = JSON.stringify(stats, null, 2);
         const nsText =
           namespaces.length > 0
-            ? namespaces.map((ns: any) => `- ${ns.namespace}: ${ns.count} memories`).join('\n')
+            ? namespaces.map((ns: NamespaceInfo) => `- ${ns.namespace}: ${ns.count} memories`).join('\n')
             : '(no namespace data available)';
 
         const oldMemoriesText =
           oldestMemories.length > 0
             ? oldestMemories
                 .slice(0, 10)
-                .map((m: any) => formatMemory(m))
+                .map((m: Memory) => formatMemory(m))
                 .join('\n\n')
             : '(none)';
 

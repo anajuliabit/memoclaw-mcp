@@ -2,19 +2,30 @@ import { formatMemory, withConcurrency, userAndAssistantText, assistantText, use
 import { validateId, validateIdentifier } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import { throwIfCancelled } from './types.js';
-import type { CreateRelationArgs, ListRelationsArgs, DeleteRelationArgs, GraphArgs } from '../types.js';
+import type {
+  CreateRelationArgs,
+  ListRelationsArgs,
+  DeleteRelationArgs,
+  GraphArgs,
+  Memory,
+  Relation,
+} from '../types.js';
 
-export async function handleRelations(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
+export async function handleRelations(
+  ctx: HandlerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult | null> {
   const { makeRequest, config, signal } = ctx;
 
   switch (name) {
     case 'memoclaw_create_relation': {
-      const { memory_id, target_id, relation_type, metadata } = args as CreateRelationArgs;
+      const { memory_id, target_id, relation_type, metadata } = args as unknown as CreateRelationArgs;
       validateId(memory_id, 'memory_id');
       validateId(target_id, 'target_id');
       validateIdentifier(relation_type, 'relation_type');
       if (!relation_type) throw new Error('relation_type is required');
-      const body: any = { target_id, relation_type };
+      const body: Record<string, unknown> = { target_id, relation_type };
       if (metadata) body.metadata = metadata;
       const result = await makeRequest('POST', `/v1/memories/${memory_id}/relations`, body);
       const relation = result.relation || result;
@@ -28,7 +39,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
     }
 
     case 'memoclaw_list_relations': {
-      const { memory_id } = args as ListRelationsArgs;
+      const { memory_id } = args as unknown as ListRelationsArgs;
       validateId(memory_id, 'memory_id');
       const result = await makeRequest('GET', `/v1/memories/${memory_id}/relations`);
       const relations = result.relations || [];
@@ -39,7 +50,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
         };
       }
       const formatted = relations
-        .map((r: any) => `🔗 ${r.id || '?'}: ${r.source_id || memory_id} —[${r.relation_type}]→ ${r.target_id}`)
+        .map((r: Relation) => `🔗 ${r.id || '?'}: ${r.source_id || memory_id} —[${r.relation_type}]→ ${r.target_id}`)
         .join('\n');
       return {
         content: [
@@ -51,7 +62,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
     }
 
     case 'memoclaw_delete_relation': {
-      const { memory_id, relation_id } = args as DeleteRelationArgs;
+      const { memory_id, relation_id } = args as unknown as DeleteRelationArgs;
       validateId(memory_id, 'memory_id');
       validateId(relation_id, 'relation_id');
       const result = await makeRequest('DELETE', `/v1/memories/${memory_id}/relations/${relation_id}`);
@@ -65,7 +76,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
     }
 
     case 'memoclaw_graph': {
-      const { memory_id, depth: rawDepth, relation_type } = args as GraphArgs;
+      const { memory_id, depth: rawDepth, relation_type } = args as unknown as GraphArgs;
       validateId(memory_id, 'memory_id');
       if (relation_type) validateIdentifier(relation_type, 'relation_type');
       if (rawDepth !== undefined && rawDepth !== null) {
@@ -75,8 +86,8 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
       }
       const depth = Math.min(Math.max(rawDepth || 1, 1), 3);
       const visited = new Set<string>();
-      const nodes: any[] = [];
-      const edges: any[] = [];
+      const nodes: Memory[] = [];
+      const edges: Relation[] = [];
       let frontier = [memory_id];
 
       for (let d = 0; d <= depth && frontier.length > 0; d++) {
@@ -108,7 +119,7 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
               (mid) => () =>
                 makeRequest('GET', `/v1/memories/${mid}/relations`)
                   .then((relResult) => ({ id: mid, relations: relResult.relations || [] }))
-                  .catch(() => ({ id: mid, relations: [] as any[] })),
+                  .catch(() => ({ id: mid, relations: [] as Relation[] })),
             ),
             config.concurrency,
             signal,
@@ -127,8 +138,8 @@ export async function handleRelations(ctx: HandlerContext, name: string, args: a
         frontier = nextFrontier;
       }
 
-      const nodesFmt = nodes.map((n: any) => formatMemory(n)).join('\n\n');
-      const edgesFmt = edges.map((r: any) => `  ${r.source_id} —[${r.relation_type}]→ ${r.target_id}`).join('\n');
+      const nodesFmt = nodes.map((n) => formatMemory(n)).join('\n\n');
+      const edgesFmt = edges.map((r) => `  ${r.source_id} —[${r.relation_type}]→ ${r.target_id}`).join('\n');
       return {
         content: [
           userAndAssistantText(

@@ -33,7 +33,7 @@ export type ContentItem = TextContentItem | ResourceLinkContentItem;
 
 export type ToolResult = { content: ContentItem[]; isError?: boolean; structuredContent?: Record<string, unknown> };
 
-export type ToolHandler = (name: string, args: any) => Promise<ToolResult>;
+export type ToolHandler = (name: string, args: Record<string, unknown>) => Promise<ToolResult>;
 
 /**
  * Progress callback for long-running operations.
@@ -86,7 +86,8 @@ export function createContext(
     // Wrap makeRequest to automatically forward the MCP cancellation signal
     // to every API call, so in-flight fetch() requests abort immediately
     // when the client sends notifications/cancelled.
-    makeRequest: (method: string, path: string, body?: any) => api.makeRequest(method, path, body, resolvedSignal),
+    makeRequest: (method: string, path: string, body?: Record<string, unknown>) =>
+      api.makeRequest(method, path, body, resolvedSignal),
     account: api.account,
     progress: progress || (async () => {}),
     signal: resolvedSignal,

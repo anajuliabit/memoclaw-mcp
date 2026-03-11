@@ -9,9 +9,13 @@ import {
   validateMetadata,
 } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
-import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs } from '../types.js';
+import type { RecallArgs, SearchArgs, ContextArgs, SuggestedArgs, CheckDuplicatesArgs, Memory } from '../types.js';
 
-export async function handleRecall(ctx: HandlerContext, name: string, args: any): Promise<ToolResult | null> {
+export async function handleRecall(
+  ctx: HandlerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult | null> {
   const { makeRequest } = ctx;
 
   switch (name) {
@@ -30,7 +34,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         before,
         pinned,
         metadata,
-      } = args as RecallArgs;
+      } = args as unknown as RecallArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
       validateSimilarity(min_similarity);
@@ -42,7 +46,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       validateISODate(after, 'after');
       validateISODate(before, 'before');
       validateMetadata(metadata);
-      const filters: Record<string, any> = {};
+      const filters: Record<string, unknown> = {};
       if (tags) filters.tags = tags;
       if (memory_type) filters.memory_type = memory_type;
       if (after) filters.after = after;
@@ -66,7 +70,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
           structuredContent: { memories: [] },
         };
       }
-      const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
+      const formatted = memories.map((m: Memory) => formatMemory(m)).join('\n\n');
       return {
         content: [
           userAndAssistantText(`Found ${memories.length} memories:\n\n${formatted}`),
@@ -91,7 +95,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
         order,
         pinned,
         metadata,
-      } = args as SearchArgs;
+      } = args as unknown as SearchArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
@@ -124,7 +128,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
           structuredContent: { memories: [] },
         };
       }
-      const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
+      const formatted = memories.map((m: Memory) => formatMemory(m)).join('\n\n');
       return {
         content: [
           userAndAssistantText(`Found ${memories.length} memories containing "${query}":\n\n${formatted}`),
@@ -135,13 +139,13 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_context': {
-      const { query, limit, namespace, session_id, agent_id } = args as ContextArgs;
+      const { query, limit, namespace, session_id, agent_id } = args as unknown as ContextArgs;
       validateQuery(query);
       validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(session_id, 'session_id');
       validateIdentifier(agent_id, 'agent_id');
-      const body: any = { query };
+      const body: Record<string, unknown> = { query };
       if (limit !== undefined) body.limit = limit;
       if (namespace) body.namespace = namespace;
       if (session_id) body.session_id = session_id;
@@ -154,7 +158,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
           structuredContent: { memories: [] },
         };
       }
-      const formatted = memories.map((m: any) => formatMemory(m)).join('\n\n');
+      const formatted = memories.map((m: Memory) => formatMemory(m)).join('\n\n');
       return {
         content: [
           userAndAssistantText(`🧠 Context for "${query}" (${memories.length} memories):\n\n${formatted}`),
@@ -165,7 +169,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_suggested': {
-      const { limit, namespace, session_id, agent_id, category } = args as SuggestedArgs;
+      const { limit, namespace, session_id, agent_id, category } = args as unknown as SuggestedArgs;
       validatePaginationParam(limit, 'limit');
       validateIdentifier(namespace, 'namespace');
       validateIdentifier(session_id, 'session_id');
@@ -186,7 +190,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
           structuredContent: { suggestions: [] },
         };
       }
-      const formatted = suggestions.map((m: any) => formatMemory(m)).join('\n\n');
+      const formatted = suggestions.map((m: Memory) => formatMemory(m)).join('\n\n');
       return {
         content: [
           userAndAssistantText(
@@ -199,7 +203,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
     }
 
     case 'memoclaw_check_duplicates': {
-      const { content, min_similarity, namespace, limit } = args as CheckDuplicatesArgs;
+      const { content, min_similarity, namespace, limit } = args as unknown as CheckDuplicatesArgs;
       if (!content || (typeof content === 'string' && content.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
@@ -207,7 +211,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       validateIdentifier(namespace, 'namespace');
       const threshold = min_similarity ?? 0.7;
       const maxResults = limit ?? 5;
-      const body: any = { query: content, limit: maxResults, min_similarity: threshold };
+      const body: Record<string, unknown> = { query: content, limit: maxResults, min_similarity: threshold };
       if (namespace) body.namespace = namespace;
       const result = await makeRequest('POST', '/v1/recall', body);
       const duplicates = result.memories || [];
@@ -231,7 +235,7 @@ export async function handleRecall(ctx: HandlerContext, name: string, args: any)
       if (!hasDuplicates) {
         text = `✅ No duplicates found (threshold: ${threshold}). Safe to store.`;
       } else {
-        const formatted = duplicates.map((m: any) => formatMemory(m)).join('\n\n');
+        const formatted = duplicates.map((m: Memory) => formatMemory(m)).join('\n\n');
         text = `⚠️ Found ${duplicates.length} potential duplicate(s) (threshold: ${threshold}):\n\n${formatted}\n\n💡 ${suggestion}`;
       }
 

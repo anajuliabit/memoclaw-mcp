@@ -180,7 +180,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const signal = extra?.signal;
 
   try {
-    const result = await handleToolCall(name, args as any, progress, signal);
+    const result = await handleToolCall(name, (args ?? {}) as Record<string, unknown>, progress, signal);
     mcpLogger.debug('tool', { event: 'success', tool: name });
     return result;
   } catch (error) {

@@ -12,7 +12,7 @@ export type { ToolResult };
 export function createHandler(api: ApiClient, config: Config) {
   return async function handleToolCall(
     name: string,
-    args: any,
+    args: Record<string, unknown>,
     progress?: ProgressCallback,
     signal?: AbortSignal,
   ): Promise<ToolResult> {
