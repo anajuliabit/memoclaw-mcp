@@ -347,6 +347,52 @@ describe('handleMemory', () => {
       expect(body.memories[0].content).toBe('ok');
       expect(body.memories[0].extra_bad_field).toBeUndefined();
     });
+
+    it('validates tags in bulk store entries', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_bulk_store', {
+          memories: [{ content: 'ok', tags: [123 as any] }],
+        }),
+      ).rejects.toThrow('non-empty string');
+    });
+
+    it('validates metadata in bulk store entries', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_bulk_store', {
+          memories: [{ content: 'ok', metadata: 'not-an-object' as any }],
+        }),
+      ).rejects.toThrow('plain object');
+    });
+
+    it('validates namespace identifier in bulk store entries', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_bulk_store', {
+          memories: [{ content: 'ok', namespace: 'bad namespace!' }],
+        }),
+      ).rejects.toThrow('invalid characters');
+    });
+
+    it('validates expires_at date in bulk store entries', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_bulk_store', {
+          memories: [{ content: 'ok', expires_at: 'not-a-date' }],
+        }),
+      ).rejects.toThrow('not a valid date');
+    });
+
+    it('validates session_id and agent_id identifiers', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_bulk_store', {
+          memories: [{ content: 'ok' }],
+          session_id: 'bad id!',
+        }),
+      ).rejects.toThrow('invalid characters');
+    });
   });
 
   // ── import ───────────────────────────────────────────────────────────────
@@ -385,6 +431,33 @@ describe('handleMemory', () => {
       const callBody = api.makeRequest.mock.calls[0][2];
       expect(callBody.memories[0].metadata).toEqual({ source: 'migration' });
       expect(callBody.memories[0].expires_at).toBe('2026-12-31T23:59:59Z');
+    });
+
+    it('validates tags in import entries', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_import', {
+          memories: [{ content: 'ok', tags: [123 as any] }],
+        }),
+      ).rejects.toThrow('non-empty string');
+    });
+
+    it('validates metadata in import entries', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_import', {
+          memories: [{ content: 'ok', metadata: [1, 2, 3] as any }],
+        }),
+      ).rejects.toThrow('plain object');
+    });
+
+    it('validates namespace identifier in import entries', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_import', {
+          memories: [{ content: 'ok', namespace: 'has spaces!' }],
+        }),
+      ).rejects.toThrow('invalid characters');
     });
   });
 
@@ -482,6 +555,33 @@ describe('handleMemory', () => {
           updates: [{ id: '1', tags: ['valid', ''] }],
         }),
       ).rejects.toThrow('tags[1] must be a non-empty string');
+    });
+
+    it('validates metadata in individual updates', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_batch_update', {
+          updates: [{ id: '1', metadata: 'not-object' as any }],
+        }),
+      ).rejects.toThrow('plain object');
+    });
+
+    it('validates namespace identifier in individual updates', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_batch_update', {
+          updates: [{ id: '1', namespace: 'bad namespace!' }],
+        }),
+      ).rejects.toThrow('invalid characters');
+    });
+
+    it('validates expires_at in individual updates', async () => {
+      const { ctx } = makeCtx();
+      await expect(
+        handleMemory(ctx, 'memoclaw_batch_update', {
+          updates: [{ id: '1', expires_at: 'not-a-date' }],
+        }),
+      ).rejects.toThrow('not a valid date');
     });
   });
 
