@@ -16,6 +16,7 @@ import {
   validateISODate,
   validatePaginationParam,
   validateMetadata,
+  sanitizeContent,
 } from '../validate.js';
 import type { HandlerContext, ToolResult } from './types.js';
 import type {
@@ -139,7 +140,7 @@ export async function handleMemory(
   switch (name) {
     case 'memoclaw_store': {
       const {
-        content,
+        content: rawContent,
         importance,
         tags,
         namespace,
@@ -151,9 +152,10 @@ export async function handleMemory(
         immutable,
         metadata,
       } = args as unknown as StoreArgs;
-      if (!content || (typeof content === 'string' && content.trim() === '')) {
+      if (!rawContent || (typeof rawContent === 'string' && rawContent.trim() === '')) {
         throw new Error('content is required and cannot be empty');
       }
+      const content = sanitizeContent(rawContent);
       validateContentLength(content);
       validateImportance(importance);
       validateTags(tags);
@@ -260,7 +262,11 @@ export async function handleMemory(
       if (Object.keys(updateFields).length === 0) {
         throw new Error('No valid update fields provided. Allowed: ' + [...UPDATE_FIELDS].join(', '));
       }
-      if (typeof updateFields.content === 'string') validateContentLength(updateFields.content);
+      if (typeof updateFields.content === 'string') {
+        const sanitized = sanitizeContent(updateFields.content);
+        updateFields.content = sanitized;
+        validateContentLength(sanitized);
+      }
       validateImportance(updateFields.importance);
       validateIdentifier(updateFields.namespace, 'namespace');
       validateIdentifier(updateFields.memory_type, 'memory_type');
@@ -353,6 +359,7 @@ export async function handleMemory(
         if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
           throw new Error(`Memory at index ${i} has empty content`);
         }
+        m.content = sanitizeContent(m.content, `Memory at index ${i}`);
         validateContentLength(m.content, `Memory at index ${i}`);
         validateImportance(m.importance, `Memory at index ${i} importance`);
         validateTags(m.tags, `Memory at index ${i} tags`);
@@ -383,6 +390,7 @@ export async function handleMemory(
         if (!m.content || (typeof m.content === 'string' && m.content.trim() === '')) {
           throw new Error(`Memory at index ${i} has empty content`);
         }
+        m.content = sanitizeContent(m.content, `Memory at index ${i}`);
         validateContentLength(m.content, `Memory at index ${i}`);
         validateImportance(m.importance, `Memory at index ${i} importance`);
         validateTags(m.tags, `Memory at index ${i} tags`);
@@ -470,7 +478,10 @@ export async function handleMemory(
         if (errMsg.includes('404') || errMsg.includes('Not Found')) {
           // Validate fields before sending individual requests (mirrors memoclaw_update validation)
           for (const u of updates) {
-            if (typeof u.content === 'string') validateContentLength(u.content);
+            if (typeof u.content === 'string') {
+              u.content = sanitizeContent(u.content);
+              validateContentLength(u.content);
+            }
             validateIdentifier(u.namespace, 'namespace');
             validateIdentifier(u.memory_type, 'memory_type');
             validateTags(u.tags);
@@ -625,15 +636,15 @@ export async function handleMemory(
       let mergedContent: string;
       switch (strategy) {
         case 'keep_source':
-          mergedContent = source.content;
+          mergedContent = sanitizeContent(source.content, 'source content');
           break;
         case 'combine':
-          mergedContent = `${target.content}\n\n${source.content}`;
+          mergedContent = sanitizeContent(`${target.content}\n\n${source.content}`, 'combined content');
           validateContentLength(mergedContent, 'Combined content');
           break;
         case 'keep_target':
         default:
-          mergedContent = target.content;
+          mergedContent = sanitizeContent(target.content, 'target content');
           break;
       }
 

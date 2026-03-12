@@ -5,6 +5,46 @@
  * reducing unnecessary API round-trips for obviously invalid input.
  */
 
+import { mcpLogger } from './logging.js';
+
+// ── Content sanitization ─────────────────────────────────────────────────────
+
+/**
+ * Control characters that can corrupt storage (excludes \t, \n, \r which are legitimate).
+ * Range: \x00-\x08, \x0B-\x0C, \x0E-\x1F
+ */
+const CONTROL_CHARS_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
+
+/** Null byte specifically — always stripped. */
+const NULL_BYTE_RE = /\x00/g;
+
+/**
+ * Sanitize content before storage.
+ *
+ * 1. Strips null bytes silently (can truncate content in some backends).
+ * 2. Logs a warning via MCP if other control characters are detected, but
+ *    does NOT remove them (non-breaking, as specified in #195).
+ *
+ * Returns the sanitized string.
+ */
+export function sanitizeContent(content: string, label = 'content'): string {
+  // Step 1: strip null bytes
+  const sanitized = content.replace(NULL_BYTE_RE, '');
+
+  // Step 2: warn if other control characters remain
+  const controlMatch = sanitized.match(CONTROL_CHARS_RE);
+  if (controlMatch) {
+    const unique = [...new Set(controlMatch)].map((c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
+    void mcpLogger.warning(
+      'sanitize',
+      `${label} contains control characters (${unique.join(', ')}). ` +
+        `These may cause issues with some backends.`,
+    );
+  }
+
+  return sanitized;
+}
+
 /** Maximum length for string identifiers (namespace, session_id, agent_id, etc.) */
 const MAX_IDENTIFIER_LENGTH = 256;
 
