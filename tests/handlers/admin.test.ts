@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { handleAdmin } from '../../src/handlers/admin.js';
 import { createContext } from '../../src/handlers/types.js';
-import { mockApi, mockApiWithErrors, testConfig } from './helpers.js';
+import { mockApi, mockApiWithErrors, testConfig, structured } from './helpers.js';
+import type { RouteValue } from './helpers.js';
 
-function makeCtx(routes: Record<string, any> = {}) {
+function makeCtx(routes: Record<string, RouteValue> = {}) {
   const api = mockApi(routes);
-  return { ctx: createContext(api as any, testConfig), api };
+  return { ctx: createContext(api, testConfig), api };
 }
 
 describe('handleAdmin', () => {
@@ -39,7 +40,7 @@ describe('handleAdmin', () => {
           'GET /v1/free-tier/status': new Error('Connection refused'),
         },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       const result = await handleAdmin(ctx, 'memoclaw_init', {});
       expect(result!.content[0].text).toContain('needs configuration');
       expect(result!.content[0].text).toContain('unreachable');
@@ -127,7 +128,7 @@ describe('handleAdmin', () => {
         { 'GET /v1/memories': { memories: [{ id: '1', content: 'a' }] } },
         { 'GET /v1/export': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       const result = await handleAdmin(ctx, 'memoclaw_export', {});
       expect(result!.content[0].text).toContain('Exported: 1 memories');
     });
@@ -258,7 +259,7 @@ describe('handleAdmin', () => {
 
     it('handles dry run with ingest fallback', async () => {
       const api = mockApiWithErrors({}, { 'POST /v1/migrate': new Error('HTTP 404: Not Found') });
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       const result = await handleAdmin(ctx, 'memoclaw_migrate', {
         files: [{ filename: 'test.md', content: '# Hello' }],
         dry_run: true,
@@ -320,10 +321,10 @@ describe('handleAdmin', () => {
         'GET /v1/memories': { memories: [] },
         'DELETE /v1/memories/': { deleted: true },
       });
-      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const ctx = createContext(api, testConfig, undefined, ac.signal);
       const result = await handleAdmin(ctx, 'memoclaw_delete_namespace', { namespace: 'test' });
       expect(result!.content[0].text).toContain('Cancelled');
-      expect((result as any).structuredContent.cancelled).toBe(true);
+      expect(result!.structuredContent!.cancelled).toBe(true);
     });
 
     it('stops export pagination when signal is aborted', async () => {
@@ -340,10 +341,10 @@ describe('handleAdmin', () => {
         },
         { 'GET /v1/export': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const ctx = createContext(api, testConfig, undefined, ac.signal);
       const result = await handleAdmin(ctx, 'memoclaw_export', {});
       expect(result!.content[0].text).toContain('cancelled');
-      expect((result as any).structuredContent.cancelled).toBe(true);
+      expect(result!.structuredContent!.cancelled).toBe(true);
     });
 
     it('stops migrate when signal is aborted mid-file', async () => {
@@ -359,7 +360,7 @@ describe('handleAdmin', () => {
         },
         { 'POST /v1/migrate': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const ctx = createContext(api, testConfig, undefined, ac.signal);
       const result = await handleAdmin(ctx, 'memoclaw_migrate', {
         files: [
           { filename: 'a.md', content: '# A' },
@@ -368,8 +369,8 @@ describe('handleAdmin', () => {
         ],
       });
       expect(result!.content[0].text).toContain('cancelled');
-      expect((result as any).structuredContent.cancelled).toBe(true);
-      expect((result as any).structuredContent.files_processed).toBeLessThan(3);
+      expect(result!.structuredContent!.cancelled).toBe(true);
+      expect(result!.structuredContent!.files_processed).toBeLessThan(3);
     });
   });
 });

@@ -381,7 +381,7 @@ describe('Tool Handlers', () => {
     });
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain('Memory stored');
-    const call = (globalThis.fetch as any).mock.calls[0];
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
     const body = JSON.parse(call[1].body);
     expect(body.content).toBe('test memory');
     expect(body.importance).toBe(0.8);
@@ -393,7 +393,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_store', arguments: { content: 'test', importance: 0 } },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     expect(body.importance).toBe(0);
   });
 
@@ -454,7 +454,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_store', arguments: { content: 'test', pinned: false } },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     expect(body.pinned).toBe(false);
   });
 
@@ -463,7 +463,7 @@ describe('Tool Handlers', () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_store', arguments: { content: 'test', immutable: true } },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     expect(body.immutable).toBe(true);
     expect(result.content[0].text).toContain('🔒 immutable');
   });
@@ -473,7 +473,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_store', arguments: { content: 'test' } },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     expect(body.immutable).toBeUndefined();
   });
 
@@ -527,7 +527,7 @@ describe('Tool Handlers', () => {
         },
       },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     expect(body.filters.tags).toEqual(['a']);
     expect(body.filters.memory_type).toBe('decision');
     expect(body.filters.after).toBe('2025-01-01T00:00:00Z');
@@ -583,7 +583,7 @@ describe('Tool Handlers', () => {
         arguments: { query: 'test', limit: 10, namespace: 'work', tags: ['a', 'b'], memory_type: 'decision' },
       },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('q=test');
     expect(url).toContain('limit=10');
     expect(url).toContain('namespace=work');
@@ -596,7 +596,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_search', arguments: { query: 'test', after: '2025-06-01T00:00:00Z' } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('after=2025-06-01');
   });
 
@@ -608,7 +608,7 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_get', arguments: { id: 'abc' } },
     });
     expect(result.content[0].text).toContain('test');
-    const url = (globalThis.fetch as any).mock.calls[0][0];
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0];
     expect(url).toContain('/v1/memories/abc');
   });
 
@@ -626,7 +626,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_list', arguments: { limit: 10, offset: 5, namespace: 'work', tags: ['a', 'b'] } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('limit=10');
     expect(url).toContain('offset=5');
     expect(url).toContain('namespace=work');
@@ -638,7 +638,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_list', arguments: { after: '2025-06-01T00:00:00Z' } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('after=2025-06-01');
   });
 
@@ -647,7 +647,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_list', arguments: { memory_type: 'decision' } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('memory_type=decision');
   });
 
@@ -668,7 +668,7 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_delete', arguments: { id: 'xyz' } },
     });
     expect(result.content[0].text).toContain('deleted');
-    const call = (globalThis.fetch as any).mock.calls[0];
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(call[1].method).toBe('DELETE');
     expect(call[0]).toContain('/v1/memories/xyz');
   });
@@ -818,7 +818,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_update', arguments: { id: '123', content: 'updated', importance: 0.9 } },
     });
-    const call = (globalThis.fetch as any).mock.calls[0];
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(call[1].method).toBe('PATCH');
     const body = JSON.parse(call[1].body);
     expect(body.content).toBe('updated');
@@ -855,7 +855,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_update', arguments: { id: '123', immutable: true } },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     expect(body.immutable).toBe(true);
   });
 
@@ -943,7 +943,7 @@ describe('Tool Handlers', () => {
     const result = await callToolHandler({
       params: { name: 'memoclaw_suggested', arguments: { category: 'stale', limit: 5 } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('category=stale');
     expect(url).toContain('limit=5');
     expect(result.content[0].text).toContain('No suggestions found');
@@ -968,7 +968,7 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_export', arguments: {} },
     });
     expect(result.content[0].text).toContain('Exported 150 memories');
-    const url = (globalThis.fetch as any).mock.calls[0][0];
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0];
     expect(url).toContain('/v1/export');
   });
 
@@ -1085,7 +1085,7 @@ describe('Tool Handlers', () => {
         arguments: { memories: [{ content: 'a' }], session_id: 's1', agent_id: 'ag1' },
       },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     // Batch endpoint sends { memories: [{ content, session_id, agent_id }] }
     expect(body.memories[0].session_id).toBe('s1');
     expect(body.memories[0].agent_id).toBe('ag1');
@@ -1209,7 +1209,7 @@ describe('Tool Handlers', () => {
     });
     expect(result.content[0].text).toContain('type=decision');
     expect(result.content[0].text).toContain('5');
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('memory_type=decision');
   });
 
@@ -1384,7 +1384,7 @@ describe('Tool Handlers', () => {
         arguments: { memories: [{ content: 'ok', extra_bad_field: 'should not appear' }] },
       },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     // Now sends to /v1/store/batch with { memories: [...] }
     expect(body.memories[0].content).toBe('ok');
     expect(body.memories[0].extra_bad_field).toBeUndefined();
@@ -1517,7 +1517,7 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_pin', arguments: { id: 'm1' } },
     });
     expect(result.content[0].text).toContain('pinned');
-    const [url, opts] = (globalThis.fetch as any).mock.calls[0];
+    const [url, opts] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(url).toContain('/v1/memories/m1');
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ pinned: true });
@@ -1537,7 +1537,7 @@ describe('Tool Handlers', () => {
       params: { name: 'memoclaw_unpin', arguments: { id: 'm1' } },
     });
     expect(result.content[0].text).toContain('unpinned');
-    const [url, opts] = (globalThis.fetch as any).mock.calls[0];
+    const [url, opts] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(url).toContain('/v1/memories/m1');
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ pinned: false });
@@ -1576,7 +1576,7 @@ describe('Tool Handlers', () => {
     });
     expect(result.content[0].text).toContain('2 tags');
     expect(result.content[0].text).toContain('frontend: 5 memories');
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('/v1/tags');
   });
 
@@ -1622,7 +1622,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_tags', arguments: { namespace: 'work', agent_id: 'ag1' } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('namespace=work');
     expect(url).toContain('agent_id=ag1');
   });
@@ -1649,7 +1649,7 @@ describe('Tool Handlers', () => {
     });
     expect(result.content[0].text).toContain('2 namespaces');
     expect(result.content[0].text).toContain('work: 10 memories');
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('/v1/namespaces');
   });
 
@@ -1666,7 +1666,7 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_namespaces', arguments: { agent_id: 'ag1' } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('agent_id=ag1');
   });
 
@@ -1719,7 +1719,7 @@ describe('Tool Handlers', () => {
         arguments: { query: 'test', limit: 5, namespace: 'work', session_id: 's1', agent_id: 'ag1' },
       },
     });
-    const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1].body);
     expect(body.query).toBe('test');
     expect(body.limit).toBe(5);
     expect(body.namespace).toBe('work');
@@ -1732,9 +1732,9 @@ describe('Tool Handlers', () => {
     await callToolHandler({
       params: { name: 'memoclaw_context', arguments: { query: 'test' } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('/v1/context');
-    const opts = (globalThis.fetch as any).mock.calls[0][1];
+    const opts = vi.mocked(globalThis.fetch).mock.calls[0][1];
     expect(opts.method).toBe('POST');
   });
 
@@ -1774,7 +1774,7 @@ describe('Tool Handlers', () => {
     expect(result.content[0].text).toContain('2 versions');
     expect(result.content[0].text).toContain('original text');
     expect(result.content[0].text).toContain('updated text');
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('/v1/memories/m1/history');
   });
 
@@ -1900,7 +1900,7 @@ describe('memoclaw_core_memories', () => {
     await callToolHandler({
       params: { name: 'memoclaw_core_memories', arguments: { limit: 5, namespace: 'work', agent_id: 'a1' } },
     });
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('limit=5');
     expect(url).toContain('namespace=work');
     expect(url).toContain('agent_id=a1');
@@ -1952,7 +1952,7 @@ describe('memoclaw_stats', () => {
     expect(text).toContain('0.64');
     expect(text).toContain('general: 100');
     expect(text).toContain('work: 22');
-    const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
     expect(url).toContain('/v1/stats');
   });
 

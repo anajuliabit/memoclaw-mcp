@@ -117,8 +117,8 @@ describe('validatePaginationParam', () => {
   });
 
   it('rejects non-number values', () => {
-    expect(() => validatePaginationParam('10' as any, 'limit')).toThrow('must be a number');
-    expect(() => validatePaginationParam(true as any, 'limit')).toThrow('must be a number');
+    expect(() => validatePaginationParam('10' as unknown as number, 'limit')).toThrow('must be a number');
+    expect(() => validatePaginationParam(true as unknown as number, 'limit')).toThrow('must be a number');
   });
 
   it('rejects non-integer values', () => {

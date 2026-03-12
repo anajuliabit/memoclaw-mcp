@@ -17,7 +17,7 @@ const testConfig = {
   concurrency: 10,
 };
 
-function mockApi(routeResponses: Record<string, any>) {
+function mockApi(routeResponses: Record<string, unknown>) {
   const calls: Array<{ method: string; path: string; body?: any }> = [];
   return {
     makeRequest: vi.fn(async (method: string, path: string, body?: any) => {
@@ -35,9 +35,9 @@ function mockApi(routeResponses: Record<string, any>) {
   };
 }
 
-function makeCtx(routes: Record<string, any> = {}, signal?: AbortSignal) {
+function makeCtx(routes: Record<string, unknown> = {}, signal?: AbortSignal) {
   const api = mockApi(routes);
-  return { ctx: createContext(api as any, testConfig, undefined, signal), api };
+  return { ctx: createContext(api as unknown as import('../src/api.js').ApiClient, testConfig, undefined, signal), api };
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ describe('handler cancellation - delete_namespace', () => {
   it('returns partial results when cancelled mid-operation', async () => {
     const ac = new AbortController();
     let listCallCount = 0;
-    const routes: Record<string, any> = {
+    const routes: Record<string, unknown> = {
       'GET /v1/memories': () => {
         listCallCount++;
         // Return a full page to trigger another loop iteration
@@ -122,7 +122,7 @@ describe('handler cancellation - export fallback', () => {
   it('returns partial results when cancelled mid-pagination', async () => {
     const ac = new AbortController();
     let pageCount = 0;
-    const routes: Record<string, any> = {
+    const routes: Record<string, unknown> = {
       'GET /v1/export': new Error('404 Not Found'),
       'GET /v1/memories': () => {
         pageCount++;
@@ -147,7 +147,7 @@ describe('handler cancellation - bulk_delete fallback', () => {
   it('returns partial results when cancelled', async () => {
     const ac = new AbortController();
     let deleteCount = 0;
-    const routes: Record<string, any> = {
+    const routes: Record<string, unknown> = {
       'POST /v1/memories/bulk-delete': new Error('Server error'),
     };
     // Add individual delete routes
@@ -171,7 +171,7 @@ describe('handler cancellation - bulk_delete fallback', () => {
 describe('signal defaults to non-aborted when not provided', () => {
   it('createContext provides a usable default signal', () => {
     const api = mockApi({});
-    const ctx = createContext(api as any, testConfig);
+    const ctx = createContext(api as unknown as import('../src/api.js').ApiClient, testConfig);
     expect(ctx.signal).toBeDefined();
     expect(ctx.signal.aborted).toBe(false);
   });

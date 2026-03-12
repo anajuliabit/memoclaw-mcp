@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { handleRelations } from '../../src/handlers/relations.js';
 import { createContext } from '../../src/handlers/types.js';
 import { mockApi, testConfig } from './helpers.js';
+import type { RouteValue } from './helpers.js';
 
-function makeCtx(routes: Record<string, any> = {}) {
+function makeCtx(routes: Record<string, RouteValue> = {}) {
   const api = mockApi(routes);
-  return { ctx: createContext(api as any, testConfig), api };
+  return { ctx: createContext(api, testConfig), api };
 }
 
 describe('handleRelations', () => {
