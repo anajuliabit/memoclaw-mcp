@@ -275,10 +275,7 @@ describe('sanitizeContent', () => {
     const warnSpy = vi.spyOn(mcpLogger, 'warning').mockResolvedValue(undefined);
     const result = sanitizeContent('data\x01\x02end');
     expect(result).toBe('data\x01\x02end'); // preserved, not stripped
-    expect(warnSpy).toHaveBeenCalledWith(
-      'sanitize',
-      expect.stringContaining('control characters'),
-    );
+    expect(warnSpy).toHaveBeenCalledWith('sanitize', expect.stringContaining('control characters'));
     warnSpy.mockRestore();
   });
 
@@ -300,10 +297,7 @@ describe('sanitizeContent', () => {
   it('uses custom label in warning messages', () => {
     const warnSpy = vi.spyOn(mcpLogger, 'warning').mockResolvedValue(undefined);
     sanitizeContent('data\x01end', 'Memory at index 3');
-    expect(warnSpy).toHaveBeenCalledWith(
-      'sanitize',
-      expect.stringContaining('Memory at index 3'),
-    );
+    expect(warnSpy).toHaveBeenCalledWith('sanitize', expect.stringContaining('Memory at index 3'));
     warnSpy.mockRestore();
   });
 });

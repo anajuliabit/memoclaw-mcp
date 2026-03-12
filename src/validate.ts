@@ -37,8 +37,7 @@ export function sanitizeContent(content: string, label = 'content'): string {
     const unique = [...new Set(controlMatch)].map((c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
     void mcpLogger.warning(
       'sanitize',
-      `${label} contains control characters (${unique.join(', ')}). ` +
-        `These may cause issues with some backends.`,
+      `${label} contains control characters (${unique.join(', ')}). ` + `These may cause issues with some backends.`,
     );
   }
 
