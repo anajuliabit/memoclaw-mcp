@@ -37,7 +37,10 @@ function mockApi(routeResponses: Record<string, unknown>) {
 
 function makeCtx(routes: Record<string, unknown> = {}, signal?: AbortSignal) {
   const api = mockApi(routes);
-  return { ctx: createContext(api as unknown as import('../src/api.js').ApiClient, testConfig, undefined, signal), api };
+  return {
+    ctx: createContext(api as unknown as import('../src/api.js').ApiClient, testConfig, undefined, signal),
+    api,
+  };
 }
 
 // ---------------------------------------------------------------------------

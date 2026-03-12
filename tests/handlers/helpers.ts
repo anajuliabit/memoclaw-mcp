@@ -14,21 +14,23 @@ export type MockApiClient = ApiClient;
 
 /** Create a mock API client with configurable route responses */
 export function mockApi(routes: Record<string, RouteValue> = {}): MockApiClient {
-  const makeRequest = vi.fn().mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
-    const key = `${method} ${path}`;
-    // Exact match first
-    if (routes[key] !== undefined) {
-      return typeof routes[key] === 'function' ? (routes[key] as Function)(path, body) : routes[key];
-    }
-    // Prefix match
-    for (const [pattern, value] of Object.entries(routes)) {
-      const [pMethod, pPath] = pattern.split(' ');
-      if (method === pMethod && pPath && path.startsWith(pPath)) {
-        return typeof value === 'function' ? (value as Function)(path, body) : value;
+  const makeRequest = vi
+    .fn()
+    .mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
+      const key = `${method} ${path}`;
+      // Exact match first
+      if (routes[key] !== undefined) {
+        return typeof routes[key] === 'function' ? (routes[key] as Function)(path, body) : routes[key];
       }
-    }
-    return {};
-  });
+      // Prefix match
+      for (const [pattern, value] of Object.entries(routes)) {
+        const [pMethod, pPath] = pattern.split(' ');
+        if (method === pMethod && pPath && path.startsWith(pPath)) {
+          return typeof value === 'function' ? (value as Function)(path, body) : value;
+        }
+      }
+      return {};
+    });
   return { makeRequest, account: { address: '0xTestWallet' } } as MockApiClient;
 }
 
@@ -37,27 +39,29 @@ export function mockApiWithErrors(
   routes: Record<string, RouteValue> = {},
   errorRoutes: Record<string, Error> = {},
 ): MockApiClient {
-  const makeRequest = vi.fn().mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
-    const key = `${method} ${path}`;
-    // Check error routes first
-    for (const [pattern, error] of Object.entries(errorRoutes)) {
-      const [pMethod, pPath] = pattern.split(' ');
-      if (method === pMethod && pPath && (path === pPath || path.startsWith(pPath))) {
-        throw error;
+  const makeRequest = vi
+    .fn()
+    .mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
+      const key = `${method} ${path}`;
+      // Check error routes first
+      for (const [pattern, error] of Object.entries(errorRoutes)) {
+        const [pMethod, pPath] = pattern.split(' ');
+        if (method === pMethod && pPath && (path === pPath || path.startsWith(pPath))) {
+          throw error;
+        }
       }
-    }
-    // Normal routes
-    if (routes[key] !== undefined) {
-      return typeof routes[key] === 'function' ? (routes[key] as Function)(path, body) : routes[key];
-    }
-    for (const [pattern, value] of Object.entries(routes)) {
-      const [pMethod, pPath] = pattern.split(' ');
-      if (method === pMethod && pPath && path.startsWith(pPath)) {
-        return typeof value === 'function' ? (value as Function)(path, body) : value;
+      // Normal routes
+      if (routes[key] !== undefined) {
+        return typeof routes[key] === 'function' ? (routes[key] as Function)(path, body) : routes[key];
       }
-    }
-    return {};
-  });
+      for (const [pattern, value] of Object.entries(routes)) {
+        const [pMethod, pPath] = pattern.split(' ');
+        if (method === pMethod && pPath && path.startsWith(pPath)) {
+          return typeof value === 'function' ? (value as Function)(path, body) : value;
+        }
+      }
+      return {};
+    });
   return { makeRequest, account: { address: '0xTestWallet' } } as MockApiClient;
 }
 
@@ -82,7 +86,5 @@ export function structured(result: ToolResult | null | undefined): Record<string
  * Type-safe accessor for resource_link items in ToolResult content.
  */
 export function resourceLinks(result: ToolResult | null | undefined): ResourceLinkContentItem[] {
-  return (result?.content ?? []).filter(
-    (item): item is ResourceLinkContentItem => item.type === 'resource_link',
-  );
+  return (result?.content ?? []).filter((item): item is ResourceLinkContentItem => item.type === 'resource_link');
 }
