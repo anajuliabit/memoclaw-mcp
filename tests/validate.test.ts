@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   validateIdentifier,
   validateId,
@@ -7,7 +7,9 @@ import {
   validateISODate,
   validatePaginationParam,
   validateMetadata,
+  sanitizeContent,
 } from '../src/validate.js';
+import { mcpLogger } from '../src/logging.js';
 
 describe('validateIdentifier', () => {
   it('returns undefined for undefined/null/empty', () => {
@@ -251,5 +253,51 @@ describe('validateMetadata', () => {
 
   it('uses custom label in error messages', () => {
     expect(() => validateMetadata('bad', 'custom_field')).toThrow('custom_field must be a plain object');
+  });
+});
+
+describe('sanitizeContent', () => {
+  it('returns clean content unchanged', () => {
+    expect(sanitizeContent('hello world')).toBe('hello world');
+  });
+
+  it('preserves tabs, newlines, and carriage returns', () => {
+    const content = 'line1\nline2\ttab\r\nwindows';
+    expect(sanitizeContent(content)).toBe(content);
+  });
+
+  it('strips null bytes silently', () => {
+    expect(sanitizeContent('hello\x00world')).toBe('helloworld');
+    expect(sanitizeContent('\x00\x00data\x00')).toBe('data');
+  });
+
+  it('warns on control characters via mcpLogger', () => {
+    const warnSpy = vi.spyOn(mcpLogger, 'warning').mockResolvedValue(undefined);
+    const result = sanitizeContent('data\x01\x02end');
+    expect(result).toBe('data\x01\x02end'); // preserved, not stripped
+    expect(warnSpy).toHaveBeenCalledWith('sanitize', expect.stringContaining('control characters'));
+    warnSpy.mockRestore();
+  });
+
+  it('strips null bytes AND warns on other control chars', () => {
+    const warnSpy = vi.spyOn(mcpLogger, 'warning').mockResolvedValue(undefined);
+    const result = sanitizeContent('a\x00b\x07c');
+    expect(result).toBe('ab\x07c'); // null stripped, BEL preserved
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when only null bytes are present', () => {
+    const warnSpy = vi.spyOn(mcpLogger, 'warning').mockResolvedValue(undefined);
+    sanitizeContent('clean\x00text');
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('uses custom label in warning messages', () => {
+    const warnSpy = vi.spyOn(mcpLogger, 'warning').mockResolvedValue(undefined);
+    sanitizeContent('data\x01end', 'Memory at index 3');
+    expect(warnSpy).toHaveBeenCalledWith('sanitize', expect.stringContaining('Memory at index 3'));
+    warnSpy.mockRestore();
   });
 });

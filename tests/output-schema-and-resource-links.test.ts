@@ -68,6 +68,7 @@ describe('outputSchema on tool definitions (#91)', () => {
     const tool = toolMap.get('memoclaw_recall')!;
     expect(tool.outputSchema).toBeDefined();
     expect(tool.outputSchema!.properties.memories).toBeDefined();
+
     const memoriesProp = tool.outputSchema!.properties.memories;
     const itemSchema = memoriesProp.items as Record<string, unknown> & { properties: Record<string, { type: string }> };
     expect(itemSchema.properties.similarity).toBeDefined();
