@@ -145,7 +145,7 @@ function buildHttpHandler(
         }
       }
       return originalEmit(event, ...args);
-    } as any;
+    } as typeof req.emit;
   }
 
   return {
@@ -1077,7 +1077,7 @@ describe('HTTP Transport CORS', () => {
         });
 
         expect(res.status).toBe(413);
-        const json = (await res.json()) as any;
+        const json = (await res.json()) as Record<string, unknown>;
         expect(json.error).toContain('100 bytes');
       });
 

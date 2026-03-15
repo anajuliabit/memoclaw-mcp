@@ -130,7 +130,7 @@ describe('validateImportance', () => {
   });
 
   it('rejects non-number', () => {
-    expect(() => validateImportance('high' as any)).toThrow(/must be a number/);
+    expect(() => validateImportance('high' as unknown as number)).toThrow(/must be a number/);
     expect(() => validateImportance(NaN)).toThrow(/must be a number/);
   });
 
@@ -154,7 +154,7 @@ describe('Handler edge cases', () => {
         failed: [],
       }),
     });
-    handler = createHandler(api as any, testConfig);
+    handler = createHandler(api as unknown as import('../src/api.js').ApiClient, testConfig);
   });
 
   describe('memoclaw_store', () => {

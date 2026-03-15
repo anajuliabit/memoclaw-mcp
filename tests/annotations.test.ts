@@ -3,26 +3,30 @@ import { handleMemory } from '../src/handlers/memory.js';
 import { handleRecall } from '../src/handlers/recall.js';
 import { handleAdmin } from '../src/handlers/admin.js';
 import { handleRelations } from '../src/handlers/relations.js';
-import type { HandlerContext } from '../src/handlers/types.js';
+import type { HandlerContext, ResourceLinkContentItem } from '../src/handlers/types.js';
+import type { Config } from '../src/config.js';
+import type { ApiClient } from '../src/api.js';
 
 /**
  * Tests for MCP 2025-06-18 content annotations.
  * Verifies that tool results include proper audience and priority hints.
  */
 
-function createMockContext(mockResponse: any = {}): HandlerContext {
+function createMockContext(mockResponse: unknown = {}): HandlerContext {
   return {
-    api: {} as any,
+    api: {} as unknown as ApiClient,
     config: {
       apiUrl: 'https://api.memoclaw.com',
       privateKey: '0x1234',
       configSource: 'env',
       timeout: 30000,
       maxRetries: 3,
-      allowedOrigins: 'any',
-    } as any,
+      concurrency: 10,
+    } satisfies Config,
     makeRequest: async () => mockResponse,
-    account: { address: '0xTestWallet' } as any,
+    account: { address: '0xTestWallet' } as ApiClient['account'],
+    progress: async () => {},
+    signal: new AbortController().signal,
   };
 }
 
@@ -49,11 +53,12 @@ describe('Content Annotations', () => {
       // Resource link to stored memory
       const link = result!.content[2];
       expect(link.type).toBe('resource_link');
-      expect((link as any).uri).toBe('memoclaw://memories/1');
+      expect((link as ResourceLinkContentItem).uri).toBe('memoclaw://memories/1');
 
       // structuredContent
       expect(result!.structuredContent).toBeDefined();
-      expect((result!.structuredContent as any).memory.id).toBe('1');
+      const sc = result!.structuredContent as Record<string, unknown> & { memory: { id: string } };
+      expect(sc.memory.id).toBe('1');
     });
 
     it('memoclaw_get returns annotated content', async () => {

@@ -50,7 +50,7 @@ describe('progress notifications', () => {
   describe('bulk_store fallback (one-by-one)', () => {
     it('calls progress callback for each stored memory', async () => {
       const api = createMockApi();
-      const handler = createHandler(api as any, mockConfig);
+      const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
       const progressCalls: Array<[number, number]> = [];
       const progress: ProgressCallback = async (current, total) => {
         progressCalls.push([current, total]);
@@ -72,7 +72,7 @@ describe('progress notifications', () => {
   describe('bulk_delete fallback (one-by-one)', () => {
     it('calls progress callback for each deleted memory', async () => {
       const api = createMockApi();
-      const handler = createHandler(api as any, mockConfig);
+      const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
       const progressCalls: Array<[number, number]> = [];
       const progress: ProgressCallback = async (current, total) => {
         progressCalls.push([current, total]);
@@ -94,7 +94,7 @@ describe('progress notifications', () => {
   describe('batch_update fallback (one-by-one)', () => {
     it('calls progress callback for each updated memory', async () => {
       const api = createMockApi();
-      const handler = createHandler(api as any, mockConfig);
+      const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
       const progressCalls: Array<[number, number]> = [];
       const progress: ProgressCallback = async (current, total) => {
         progressCalls.push([current, total]);
@@ -124,7 +124,7 @@ describe('progress notifications', () => {
           { id: 'ns-2', content: 'test2' },
         ],
       });
-      const handler = createHandler(api as any, mockConfig);
+      const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
       const progressCalls: Array<[number, number]> = [];
       const progress: ProgressCallback = async (current, total) => {
         progressCalls.push([current, total]);
@@ -145,7 +145,7 @@ describe('progress notifications', () => {
   describe('without progress callback', () => {
     it('works normally when no progress callback is provided', async () => {
       const api = createMockApi();
-      const handler = createHandler(api as any, mockConfig);
+      const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
 
       // Should not throw
       const result = await handler('memoclaw_bulk_store', {
@@ -167,14 +167,14 @@ describe('structuredContent on empty results', () => {
 
   it('memoclaw_recall returns structuredContent on empty results', async () => {
     const api = createEmptyApi();
-    const handler = createHandler(api as any, mockConfig);
+    const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
     const result = await handler('memoclaw_recall', { query: 'test' });
     expect(result.structuredContent).toEqual({ memories: [] });
   });
 
   it('memoclaw_search returns structuredContent on empty results', async () => {
     const api = createEmptyApi();
-    const handler = createHandler(api as any, mockConfig);
+    const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
     const result = await handler('memoclaw_search', { query: 'test' });
     expect(result.structuredContent).toEqual({ memories: [] });
   });
@@ -182,21 +182,21 @@ describe('structuredContent on empty results', () => {
   it('memoclaw_context returns structuredContent on empty results', async () => {
     const api = createEmptyApi();
     api.makeRequest = vi.fn(async () => ({ memories: [] }));
-    const handler = createHandler(api as any, mockConfig);
+    const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
     const result = await handler('memoclaw_context', { query: 'test' });
     expect(result.structuredContent).toEqual({ memories: [] });
   });
 
   it('memoclaw_suggested returns structuredContent on empty results', async () => {
     const api = createEmptyApi();
-    const handler = createHandler(api as any, mockConfig);
+    const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
     const result = await handler('memoclaw_suggested', {});
     expect(result.structuredContent).toEqual({ suggestions: [] });
   });
 
   it('memoclaw_list_relations returns structuredContent on empty results', async () => {
     const api = createEmptyApi();
-    const handler = createHandler(api as any, mockConfig);
+    const handler = createHandler(api as unknown as import('../src/api.js').ApiClient, mockConfig);
     const result = await handler('memoclaw_list_relations', { memory_id: 'test-id' });
     expect(result.structuredContent).toEqual({ relations: [] });
   });

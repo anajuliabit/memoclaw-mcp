@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { handleRecall } from '../../src/handlers/recall.js';
 import { createContext } from '../../src/handlers/types.js';
 import { mockApi, testConfig } from './helpers.js';
+import type { RouteValue } from './helpers.js';
 
-function makeCtx(routes: Record<string, any> = {}) {
+function makeCtx(routes: Record<string, RouteValue> = {}) {
   const api = mockApi(routes);
-  return { ctx: createContext(api as any, testConfig), api };
+  return { ctx: createContext(api, testConfig), api };
 }
 
 describe('handleRecall', () => {
@@ -257,7 +258,7 @@ describe('handleRecall', () => {
       const result = await handleRecall(ctx, 'memoclaw_check_duplicates', { content: 'similar content' });
       expect(result!.content[0].text).toContain('potential duplicate');
       expect(result!.structuredContent!.has_duplicates).toBe(true);
-      expect((result!.structuredContent!.duplicates as any[]).length).toBe(1);
+      expect((result!.structuredContent!.duplicates as unknown[]).length).toBe(1);
     });
 
     it('suggests updating for very high similarity (>= 0.9)', async () => {

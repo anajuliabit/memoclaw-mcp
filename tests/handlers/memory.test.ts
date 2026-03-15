@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { handleMemory } from '../../src/handlers/memory.js';
 import { createContext } from '../../src/handlers/types.js';
-import { mockApi, mockApiWithErrors, testConfig } from './helpers.js';
+import { mockApi, mockApiWithErrors, testConfig, structured, resourceLinks } from './helpers.js';
+import type { RouteValue } from './helpers.js';
 
-function makeCtx(routes: Record<string, any> = {}) {
+function makeCtx(routes: Record<string, RouteValue> = {}) {
   const api = mockApi(routes);
-  return { ctx: createContext(api as any, testConfig), api };
+  return { ctx: createContext(api, testConfig), api };
 }
 
 describe('handleMemory', () => {
@@ -51,7 +52,7 @@ describe('handleMemory', () => {
         pinned: true,
         immutable: true,
       });
-      const body = api.makeRequest.mock.calls[0][2];
+      const body = api.makeRequest.mock.calls[0][2] as Record<string, unknown>;
       expect(body.importance).toBe(0.8);
       expect(body.tags).toEqual(['a']);
       expect(body.pinned).toBe(true);
@@ -67,7 +68,7 @@ describe('handleMemory', () => {
         metadata: { source: 'slack', channel: '#general' },
       });
       expect(result).not.toBeNull();
-      const body = api.makeRequest.mock.calls[0][2];
+      const body = api.makeRequest.mock.calls[0][2] as Record<string, unknown>;
       expect(body.metadata).toEqual({ source: 'slack', channel: '#general' });
     });
 
@@ -76,7 +77,7 @@ describe('handleMemory', () => {
         'POST /v1/store': { memory: { id: '1', content: 'test' } },
       });
       await handleMemory(ctx, 'memoclaw_store', { content: 'test' });
-      const body = api.makeRequest.mock.calls[0][2];
+      const body = api.makeRequest.mock.calls[0][2] as Record<string, unknown>;
       expect(body.metadata).toBeUndefined();
     });
   });
@@ -120,7 +121,7 @@ describe('handleMemory', () => {
         'GET /v1/memories': { memories: [], total: 0 },
       });
       await handleMemory(ctx, 'memoclaw_list', { before: '2025-06-01T00:00:00Z' });
-      const path = api.makeRequest.mock.calls[0][1];
+      const path = api.makeRequest.mock.calls[0][1] as string;
       expect(path).toContain('before=2025-06-01T00%3A00%3A00Z');
     });
 
@@ -143,7 +144,7 @@ describe('handleMemory', () => {
         'GET /v1/memories': { memories: [], total: 0 },
       });
       await handleMemory(ctx, 'memoclaw_list', { sort: 'importance', order: 'asc' });
-      const path = api.makeRequest.mock.calls[0][1];
+      const path = api.makeRequest.mock.calls[0][1] as string;
       expect(path).toContain('sort=importance');
       expect(path).toContain('order=asc');
     });
@@ -153,7 +154,7 @@ describe('handleMemory', () => {
         'GET /v1/memories': { memories: [{ id: '1', content: 'a', pinned: true }], total: 1 },
       });
       await handleMemory(ctx, 'memoclaw_list', { pinned: true });
-      const path = api.makeRequest.mock.calls[0][1];
+      const path = api.makeRequest.mock.calls[0][1] as string;
       expect(path).toContain('pinned=true');
     });
 
@@ -162,7 +163,7 @@ describe('handleMemory', () => {
         'GET /v1/memories': { memories: [], total: 0 },
       });
       await handleMemory(ctx, 'memoclaw_list', { pinned: false });
-      const path = api.makeRequest.mock.calls[0][1];
+      const path = api.makeRequest.mock.calls[0][1] as string;
       expect(path).toContain('pinned=false');
     });
 
@@ -171,7 +172,7 @@ describe('handleMemory', () => {
         'GET /v1/memories': { memories: [], total: 0 },
       });
       await handleMemory(ctx, 'memoclaw_list', { metadata: { source: 'slack' } });
-      const path = api.makeRequest.mock.calls[0][1];
+      const path = api.makeRequest.mock.calls[0][1] as string;
       expect(path).toContain('metadata=%7B%22source%22%3A%22slack%22%7D');
     });
 
@@ -180,7 +181,7 @@ describe('handleMemory', () => {
         'GET /v1/memories': { memories: [], total: 0 },
       });
       await handleMemory(ctx, 'memoclaw_list', {});
-      const path = api.makeRequest.mock.calls[0][1];
+      const path = api.makeRequest.mock.calls[0][1] as string;
       expect(path).not.toContain('metadata');
     });
   });
@@ -212,7 +213,7 @@ describe('handleMemory', () => {
         'PATCH /v1/memories/': { memory: { id: '1', content: 'test' } },
       });
       await handleMemory(ctx, 'memoclaw_update', { id: '1', metadata: { key: 'val' } });
-      const body = api.makeRequest.mock.calls[0][2];
+      const body = api.makeRequest.mock.calls[0][2] as Record<string, unknown>;
       expect(body.metadata).toEqual({ key: 'val' });
     });
 
@@ -235,14 +236,14 @@ describe('handleMemory', () => {
         'PATCH /v1/memories/': { memory: { id: '1', content: 'test' } },
       });
       await handleMemory(ctx, 'memoclaw_update', { id: '1', session_id: 'sess1', agent_id: 'agent1' });
-      const body = api.makeRequest.mock.calls[0][2];
+      const body = api.makeRequest.mock.calls[0][2] as Record<string, unknown>;
       expect(body.session_id).toBe('sess1');
       expect(body.agent_id).toBe('agent1');
     });
 
     it('validates tags in update', async () => {
       const { ctx } = makeCtx();
-      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', tags: [123 as any] })).rejects.toThrow(
+      await expect(handleMemory(ctx, 'memoclaw_update', { id: '1', tags: [123 as unknown as string] })).rejects.toThrow(
         'tags[0] must be a non-empty string',
       );
     });
@@ -285,7 +286,7 @@ describe('handleMemory', () => {
         { 'DELETE /v1/memories/': { deleted: true } },
         { 'POST /v1/memories/bulk-delete': new Error('server error') },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       const result = await handleMemory(ctx, 'memoclaw_bulk_delete', { ids: ['1', '2'] });
       expect(result!.content[0].text).toContain('2 succeeded');
     });
@@ -329,7 +330,7 @@ describe('handleMemory', () => {
         { 'POST /v1/store': { memory: { id: '1', content: 'ok' } } },
         { 'POST /v1/store/batch': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       const result = await handleMemory(ctx, 'memoclaw_bulk_store', {
         memories: [{ content: 'a' }, { content: 'b' }],
       });
@@ -343,16 +344,17 @@ describe('handleMemory', () => {
       await handleMemory(ctx, 'memoclaw_bulk_store', {
         memories: [{ content: 'ok', extra_bad_field: 'should not appear' }],
       });
-      const body = api.makeRequest.mock.calls[0][2];
-      expect(body.memories[0].content).toBe('ok');
-      expect(body.memories[0].extra_bad_field).toBeUndefined();
+      const body = api.makeRequest.mock.calls[0][2] as Record<string, unknown>;
+      const memories = body.memories as Array<Record<string, unknown>>;
+      expect(memories[0].content).toBe('ok');
+      expect(memories[0].extra_bad_field).toBeUndefined();
     });
 
     it('validates tags in bulk store entries', async () => {
       const { ctx } = makeCtx();
       await expect(
         handleMemory(ctx, 'memoclaw_bulk_store', {
-          memories: [{ content: 'ok', tags: [123 as any] }],
+          memories: [{ content: 'ok', tags: [123 as unknown as string] }],
         }),
       ).rejects.toThrow('non-empty string');
     });
@@ -361,7 +363,7 @@ describe('handleMemory', () => {
       const { ctx } = makeCtx();
       await expect(
         handleMemory(ctx, 'memoclaw_bulk_store', {
-          memories: [{ content: 'ok', metadata: 'not-an-object' as any }],
+          memories: [{ content: 'ok', metadata: 'not-an-object' as unknown as Record<string, unknown> }],
         }),
       ).rejects.toThrow('plain object');
     });
@@ -414,10 +416,13 @@ describe('handleMemory', () => {
 
     it('passes metadata and expires_at fields to API', async () => {
       const { ctx, api } = makeCtx({
-        'POST /v1/store/batch': (_path: string, body: any) => ({
-          memories: body.memories.map((m: any, i: number) => ({ id: String(i), ...m })),
-          failed: [],
-        }),
+        'POST /v1/store/batch': (_path: string, body: Record<string, unknown>) => {
+          const memories = body.memories as Array<Record<string, unknown>>;
+          return {
+            memories: memories.map((m, i) => ({ id: String(i), ...m })),
+            failed: [],
+          };
+        },
       });
       await handleMemory(ctx, 'memoclaw_import', {
         memories: [
@@ -428,16 +433,17 @@ describe('handleMemory', () => {
           },
         ],
       });
-      const callBody = api.makeRequest.mock.calls[0][2];
-      expect(callBody.memories[0].metadata).toEqual({ source: 'migration' });
-      expect(callBody.memories[0].expires_at).toBe('2026-12-31T23:59:59Z');
+      const callBody = api.makeRequest.mock.calls[0][2] as Record<string, unknown>;
+      const memories = callBody.memories as Array<Record<string, unknown>>;
+      expect(memories[0].metadata).toEqual({ source: 'migration' });
+      expect(memories[0].expires_at).toBe('2026-12-31T23:59:59Z');
     });
 
     it('validates tags in import entries', async () => {
       const { ctx } = makeCtx();
       await expect(
         handleMemory(ctx, 'memoclaw_import', {
-          memories: [{ content: 'ok', tags: [123 as any] }],
+          memories: [{ content: 'ok', tags: [123 as unknown as string] }],
         }),
       ).rejects.toThrow('non-empty string');
     });
@@ -446,7 +452,7 @@ describe('handleMemory', () => {
       const { ctx } = makeCtx();
       await expect(
         handleMemory(ctx, 'memoclaw_import', {
-          memories: [{ content: 'ok', metadata: [1, 2, 3] as any }],
+          memories: [{ content: 'ok', metadata: [1, 2, 3] as unknown as Record<string, unknown> }],
         }),
       ).rejects.toThrow('plain object');
     });
@@ -500,7 +506,7 @@ describe('handleMemory', () => {
         { 'PATCH /v1/memories/': { memory: { id: '1', content: 'updated' } } },
         { 'POST /v1/memories/batch-update': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       const result = await handleMemory(ctx, 'memoclaw_batch_update', {
         updates: [{ id: '1', content: 'new' }],
       });
@@ -527,7 +533,7 @@ describe('handleMemory', () => {
         { 'PATCH /v1/memories/': { memory: { id: '1', content: 'ok' } } },
         { 'POST /v1/memories/batch-update': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       await expect(
         handleMemory(ctx, 'memoclaw_batch_update', {
           updates: [{ id: '1', content: longContent }],
@@ -540,7 +546,7 @@ describe('handleMemory', () => {
         { 'PATCH /v1/memories/': { memory: { id: '1', content: 'ok' } } },
         { 'POST /v1/memories/batch-update': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       await expect(
         handleMemory(ctx, 'memoclaw_batch_update', {
           updates: [{ id: '1', namespace: 'invalid namespace!' }],
@@ -561,7 +567,7 @@ describe('handleMemory', () => {
       const { ctx } = makeCtx();
       await expect(
         handleMemory(ctx, 'memoclaw_batch_update', {
-          updates: [{ id: '1', metadata: 'not-object' as any }],
+          updates: [{ id: '1', metadata: 'not-object' as unknown as Record<string, unknown> }],
         }),
       ).rejects.toThrow('plain object');
     });
@@ -600,7 +606,7 @@ describe('handleMemory', () => {
         { 'GET /v1/memories': { memories: [], total: 15 } },
         { 'GET /v1/memories/count': new Error('Not found') },
       );
-      const ctx = createContext(api as any, testConfig);
+      const ctx = createContext(api, testConfig);
       const result = await handleMemory(ctx, 'memoclaw_count', {});
       expect(result!.content[0].text).toContain('15');
     });
@@ -619,8 +625,7 @@ describe('handleMemory', () => {
       expect(result!.content[0].text).toContain('session=sess-123');
       expect(result!.content[0].text).toContain('after=2025-01-01T00:00:00Z');
       expect(result!.content[0].text).toContain('before=2025-12-31T23:59:59Z');
-      // Verify params were passed to API
-      const callUrl = api.makeRequest.mock.calls[0][1];
+      const callUrl = api.makeRequest.mock.calls[0][1] as string;
       expect(callUrl).toContain('session_id=sess-123');
       expect(callUrl).toContain('after=2025-01-01T00%3A00%3A00Z');
       expect(callUrl).toContain('before=2025-12-31T23%3A59%3A59Z');
@@ -633,7 +638,7 @@ describe('handleMemory', () => {
       const result = await handleMemory(ctx, 'memoclaw_count', { pinned: true });
       expect(result!.content[0].text).toContain('3');
       expect(result!.content[0].text).toContain('pinned=true');
-      const callUrl = api.makeRequest.mock.calls[0][1];
+      const callUrl = api.makeRequest.mock.calls[0][1] as string;
       expect(callUrl).toContain('pinned=true');
     });
 
@@ -646,7 +651,7 @@ describe('handleMemory', () => {
       });
       expect(result!.content[0].text).toContain('2');
       expect(result!.content[0].text).toContain('metadata');
-      const callUrl = api.makeRequest.mock.calls[0][1];
+      const callUrl = api.makeRequest.mock.calls[0][1] as string;
       expect(callUrl).toContain('metadata=%7B%22source%22%3A%22slack%22%7D');
     });
   });
@@ -662,30 +667,30 @@ describe('handleMemory', () => {
   describe('cancellation support', () => {
     it('stops bulk_delete when signal is pre-aborted', async () => {
       const ac = new AbortController();
-      ac.abort(); // pre-abort
+      ac.abort();
       const api = mockApiWithErrors(
         { 'DELETE /v1/memories/': { deleted: true } },
         { 'POST /v1/memories/bulk-delete': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const ctx = createContext(api, testConfig, undefined, ac.signal);
       const ids = Array.from({ length: 20 }, (_, i) => `id-${i}`);
       const result = await handleMemory(ctx, 'memoclaw_bulk_delete', { ids });
-      expect((result as any).structuredContent.cancelled).toBe(true);
-      expect((result as any).structuredContent.succeeded).toBe(0);
+      expect(structured(result).cancelled).toBe(true);
+      expect(structured(result).succeeded).toBe(0);
     });
 
     it('stops bulk_store when signal is pre-aborted', async () => {
       const ac = new AbortController();
-      ac.abort(); // pre-abort
+      ac.abort();
       const api = mockApiWithErrors(
         { 'POST /v1/store': () => ({ memory: { id: 'm1', content: 'x' } }) },
         { 'POST /v1/store/batch': new Error('HTTP 404: Not Found') },
       );
-      const ctx = createContext(api as any, testConfig, undefined, ac.signal);
+      const ctx = createContext(api, testConfig, undefined, ac.signal);
       const memories = Array.from({ length: 20 }, (_, i) => ({ content: `memory ${i}` }));
       const result = await handleMemory(ctx, 'memoclaw_bulk_store', { memories });
-      expect((result as any).structuredContent.cancelled).toBe(true);
-      expect((result as any).structuredContent.succeeded).toBe(0);
+      expect(structured(result).cancelled).toBe(true);
+      expect(structured(result).succeeded).toBe(0);
     });
   });
 
@@ -710,13 +715,13 @@ describe('handleMemory', () => {
       namespace: 'test',
     };
 
-    function mergeCtx(overrides: { source?: any; target?: any } = {}) {
+    function mergeCtx(overrides: { source?: Record<string, unknown>; target?: Record<string, unknown> } = {}) {
       const src = overrides.source || sourceMemory;
       const tgt = overrides.target || targetMemory;
       return makeCtx({
         'GET /v1/memories/src-1': { memory: src },
         'GET /v1/memories/tgt-1': { memory: tgt },
-        'PATCH /v1/memories/tgt-1': (_path: string, body: any) => ({
+        'PATCH /v1/memories/tgt-1': (_path: string, body: Record<string, unknown>) => ({
           memory: { ...tgt, ...body },
         }),
         'DELETE /v1/memories/src-1': { deleted: true },
@@ -732,19 +737,17 @@ describe('handleMemory', () => {
       expect(result).not.toBeNull();
       expect(result!.content[0].text).toContain('Merged memory');
       expect(result!.content[0].text).toContain('strategy: keep_target');
-      expect((result as any).structuredContent.deleted_id).toBe('src-1');
-      expect((result as any).structuredContent.strategy).toBe('keep_target');
+      expect(structured(result).deleted_id).toBe('src-1');
+      expect(structured(result).strategy).toBe('keep_target');
 
-      // Check update payload
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
       expect(patchCall).toBeDefined();
-      const body = patchCall![2];
+      const body = patchCall![2] as Record<string, unknown>;
       expect(body.content).toBe('Target content');
       expect(body.tags).toEqual(['b', 'c', 'a']);
       expect(body.importance).toBe(0.8);
 
-      // Check source was deleted
-      const deleteCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'DELETE');
+      const deleteCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'DELETE');
       expect(deleteCall).toBeDefined();
     });
 
@@ -756,9 +759,9 @@ describe('handleMemory', () => {
         strategy: 'keep_source',
       });
       expect(result).not.toBeNull();
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].content).toBe('Source content');
-      expect((result as any).structuredContent.strategy).toBe('keep_source');
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).content).toBe('Source content');
+      expect(structured(result).strategy).toBe('keep_source');
     });
 
     it('merges with combine strategy', async () => {
@@ -769,9 +772,9 @@ describe('handleMemory', () => {
         strategy: 'combine',
       });
       expect(result).not.toBeNull();
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].content).toBe('Target content\n\nSource content');
-      expect((result as any).structuredContent.strategy).toBe('combine');
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).content).toBe('Target content\n\nSource content');
+      expect(structured(result).strategy).toBe('combine');
     });
 
     it('keeps the higher importance score', async () => {
@@ -782,8 +785,8 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].importance).toBe(0.95);
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).importance).toBe(0.95);
     });
 
     it('deduplicates merged tags', async () => {
@@ -792,9 +795,8 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      // target has ['b', 'c'], source has ['a', 'b'] → union = ['b', 'c', 'a']
-      expect(patchCall![2].tags).toEqual(['b', 'c', 'a']);
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).tags).toEqual(['b', 'c', 'a']);
     });
 
     it('preserves pinned from either memory', async () => {
@@ -805,8 +807,8 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].pinned).toBe(true);
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).pinned).toBe(true);
     });
 
     it('preserves immutable from either memory', async () => {
@@ -817,8 +819,8 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].immutable).toBe(true);
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).immutable).toBe(true);
     });
 
     it('does not set immutable when neither memory is immutable', async () => {
@@ -827,8 +829,8 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].immutable).toBeUndefined();
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).immutable).toBeUndefined();
     });
 
     it('rejects same source and target', async () => {
@@ -881,8 +883,8 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].tags).toEqual([]);
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).tags).toEqual([]);
     });
 
     it('handles memories with no importance', async () => {
@@ -894,8 +896,8 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const patchCall = api.makeRequest.mock.calls.find((c: any[]) => c[0] === 'PATCH');
-      expect(patchCall![2].importance).toBe(0);
+      const patchCall = api.makeRequest.mock.calls.find((c: unknown[]) => c[0] === 'PATCH');
+      expect((patchCall![2] as Record<string, unknown>).importance).toBe(0);
     });
 
     it('includes resource_link to merged memory', async () => {
@@ -904,9 +906,9 @@ describe('handleMemory', () => {
         source_id: 'src-1',
         target_id: 'tgt-1',
       });
-      const link = result!.content.find((c: any) => c.type === 'resource_link');
-      expect(link).toBeDefined();
-      expect((link as any).uri).toBe('memoclaw://memories/tgt-1');
+      const links = resourceLinks(result);
+      expect(links.length).toBeGreaterThan(0);
+      expect(links[0].uri).toBe('memoclaw://memories/tgt-1');
     });
 
     it('validates combined content length', async () => {
