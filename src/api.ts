@@ -40,11 +40,46 @@ export function createApiClient(config: Config) {
   }
 
   /**
-   * Sleep for exponential backoff: base * 2^attempt (with jitter).
+   * Parse the Retry-After header value into milliseconds.
+   * Supports both delta-seconds ("120") and HTTP-date ("Wed, 15 Mar 2026 12:30:00 GMT") formats.
+   * Returns null if the header is missing, unparseable, or yields a negative/zero value.
    */
-  function backoff(attempt: number): Promise<void> {
-    const base = 1000;
-    const delay = base * Math.pow(2, attempt) + Math.random() * 500;
+  function parseRetryAfter(headerValue: string | null): number | null {
+    if (!headerValue) return null;
+    const trimmed = headerValue.trim();
+
+    // Try delta-seconds first (e.g. "120")
+    if (/^\d+$/.test(trimmed)) {
+      const seconds = parseInt(trimmed, 10);
+      return seconds > 0 ? seconds * 1000 : null;
+    }
+
+    // Try HTTP-date format (e.g. "Wed, 15 Mar 2026 12:30:00 GMT")
+    const date = new Date(trimmed);
+    if (!isNaN(date.getTime())) {
+      const delayMs = date.getTime() - Date.now();
+      return delayMs > 0 ? delayMs : null;
+    }
+
+    return null;
+  }
+
+  /** Maximum delay from Retry-After header: 60 seconds */
+  const MAX_RETRY_AFTER_MS = 60_000;
+
+  /**
+   * Sleep for the appropriate retry delay.
+   * Uses Retry-After header when available (capped at 60s), otherwise exponential backoff with jitter.
+   */
+  function backoff(attempt: number, retryAfterMs?: number | null): Promise<void> {
+    let delay: number;
+    if (retryAfterMs != null && retryAfterMs > 0) {
+      delay = Math.min(retryAfterMs, MAX_RETRY_AFTER_MS);
+      mcpLogger.debug('api', { event: 'retry_after', delayMs: delay, raw: retryAfterMs });
+    } else {
+      const base = 1000;
+      delay = base * Math.pow(2, attempt) + Math.random() * 500;
+    }
     return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
@@ -57,6 +92,7 @@ export function createApiClient(config: Config) {
     const url = `${apiUrl}${path}`;
     const { timeout, maxRetries } = config;
     let lastError: Error | null = null;
+    let lastRetryAfterMs: number | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Bail out immediately if already cancelled before starting the attempt
@@ -68,7 +104,8 @@ export function createApiClient(config: Config) {
 
       if (attempt > 0) {
         mcpLogger.debug('api', { event: 'retry', method, path, attempt });
-        await backoff(attempt - 1);
+        await backoff(attempt - 1, lastRetryAfterMs);
+        lastRetryAfterMs = null;
       }
 
       let onExternalAbort: (() => void) | undefined;
@@ -143,6 +180,7 @@ export function createApiClient(config: Config) {
 
         // Retry on transient server errors
         if (isTransient(res.status) && attempt < maxRetries) {
+          lastRetryAfterMs = parseRetryAfter(res.headers.get('Retry-After'));
           lastError = new Error(`HTTP ${res.status}`);
           continue;
         }
