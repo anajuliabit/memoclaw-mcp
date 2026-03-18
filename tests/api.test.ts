@@ -122,6 +122,95 @@ describe('API Client', () => {
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     }, 15000);
 
+    it('respects Retry-After header (delta-seconds) on 429', async () => {
+      const retryConfig = { ...config, maxRetries: 1 };
+      fetchSpy
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'Retry-After': '1' }))
+        .mockResolvedValueOnce(mockResponse(200, { ok: true }));
+
+      const start = Date.now();
+      const client = createApiClient(retryConfig);
+      const result = await client.makeRequest('GET', '/v1/memories');
+      const elapsed = Date.now() - start;
+
+      expect(result).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      // Should wait ~1000ms (Retry-After: 1), not default backoff
+      expect(elapsed).toBeGreaterThanOrEqual(900);
+      expect(elapsed).toBeLessThan(3000);
+    }, 15000);
+
+    it('respects Retry-After header (HTTP-date) on 429', async () => {
+      // Use 2 seconds ahead to account for second-level precision in toUTCString()
+      const futureDate = new Date(Date.now() + 2000).toUTCString();
+      const retryConfig = { ...config, maxRetries: 1 };
+      fetchSpy
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'Retry-After': futureDate }))
+        .mockResolvedValueOnce(mockResponse(200, { ok: true }));
+
+      const start = Date.now();
+      const client = createApiClient(retryConfig);
+      const result = await client.makeRequest('GET', '/v1/memories');
+      const elapsed = Date.now() - start;
+
+      expect(result).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      // Should wait based on the HTTP-date (at least 500ms given second rounding)
+      expect(elapsed).toBeGreaterThanOrEqual(500);
+      expect(elapsed).toBeLessThan(4000);
+    }, 15000);
+
+    it('caps Retry-After at 60 seconds', async () => {
+      const retryConfig = { ...config, maxRetries: 1 };
+      // Server says wait 120 seconds, but we cap at 60
+      fetchSpy
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'Retry-After': '120' }))
+        .mockResolvedValueOnce(mockResponse(200, { ok: true }));
+
+      const client = createApiClient(retryConfig);
+      // Use fake timers for this test to avoid actually waiting 60s
+      vi.useFakeTimers();
+      const promise = client.makeRequest('GET', '/v1/memories');
+
+      // Advance time to just past 60s (the cap)
+      await vi.advanceTimersByTimeAsync(61_000);
+
+      const result = await promise;
+      expect(result).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    }, 15000);
+
+    it('falls back to exponential backoff when Retry-After header is missing', async () => {
+      const retryConfig = { ...config, maxRetries: 1 };
+      // 429 without Retry-After header
+      fetchSpy
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests'))
+        .mockResolvedValueOnce(mockResponse(200, { ok: true }));
+
+      const start = Date.now();
+      const client = createApiClient(retryConfig);
+      const result = await client.makeRequest('GET', '/v1/memories');
+      const elapsed = Date.now() - start;
+
+      expect(result).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      // Default backoff for attempt 0: base(1000) * 2^0 + jitter = ~1000-1500ms
+      expect(elapsed).toBeGreaterThanOrEqual(900);
+    }, 15000);
+
+    it('ignores invalid Retry-After header values', async () => {
+      const retryConfig = { ...config, maxRetries: 1 };
+      fetchSpy
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'Retry-After': 'not-a-number' }))
+        .mockResolvedValueOnce(mockResponse(200, { ok: true }));
+
+      const client = createApiClient(retryConfig);
+      const result = await client.makeRequest('GET', '/v1/memories');
+      expect(result).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    }, 15000);
+
     it('retries on 502 and 504', async () => {
       const retryConfig = { ...config, maxRetries: 2 };
       fetchSpy
