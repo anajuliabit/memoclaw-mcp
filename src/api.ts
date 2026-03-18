@@ -73,7 +73,7 @@ export function createApiClient(config: Config) {
    */
   function backoff(attempt: number, retryAfterMs?: number | null): Promise<void> {
     let delay: number;
-    if (retryAfterMs != null && retryAfterMs > 0) {
+    if (retryAfterMs !== null && retryAfterMs !== undefined && retryAfterMs > 0) {
       delay = Math.min(retryAfterMs, MAX_RETRY_AFTER_MS);
       mcpLogger.debug('api', { event: 'retry_after', delayMs: delay, raw: retryAfterMs });
     } else {
