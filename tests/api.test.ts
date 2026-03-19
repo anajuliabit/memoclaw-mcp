@@ -40,13 +40,16 @@ import { loadConfig } from '../src/config.js';
 
 // Helper to create a mock Response
 function mockResponse(status: number, body: any = {}, headers: Record<string, string> = {}) {
+  const normalizedHeaders = Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
+  );
   return {
     status,
     ok: status >= 200 && status < 300,
     json: vi.fn().mockResolvedValue(body),
     text: vi.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
     headers: {
-      get: (name: string) => headers[name] || null,
+      get: (name: string) => normalizedHeaders[name.toLowerCase()] ?? null,
     },
   } as unknown as Response;
 }
@@ -160,6 +163,57 @@ describe('API Client', () => {
       await expect(client.makeRequest('GET', '/v1/memories')).rejects.toThrow('HTTP 404');
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
+
+    it('waits for Retry-After seconds before retrying 429', async () => {
+      vi.useFakeTimers();
+      try {
+        const retryConfig = { ...config, maxRetries: 1 };
+        fetchSpy
+          .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'Retry-After': '3' }))
+          .mockResolvedValueOnce(mockResponse(200, { ok: true }));
+
+        const client = createApiClient(retryConfig);
+        const promise = client.makeRequest('GET', '/v1/memories');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        await vi.advanceTimersByTimeAsync(2999);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+        await promise;
+      } finally {
+        vi.useRealTimers();
+      }
+    }, 15000);
+
+    it('supports HTTP-date Retry-After values', async () => {
+      vi.useFakeTimers();
+      try {
+        const retryConfig = { ...config, maxRetries: 1 };
+        const futureDate = new Date(Date.now() + 7000).toUTCString();
+        fetchSpy
+          .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'Retry-After': futureDate }))
+          .mockResolvedValueOnce(mockResponse(200, { ok: true }));
+
+        const client = createApiClient(retryConfig);
+        const promise = client.makeRequest('GET', '/v1/memories');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+        await promise;
+      } finally {
+        vi.useRealTimers();
+      }
+    }, 15000);
 
     it('retries on network error', async () => {
       const retryConfig = { ...config, maxRetries: 1 };
