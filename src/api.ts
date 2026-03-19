@@ -6,6 +6,50 @@ import { privateKeyToAccount } from 'viem/accounts';
 import type { Config } from './config.js';
 import { mcpLogger } from './logging.js';
 
+const BASE_BACKOFF_MS = 1000;
+const BACKOFF_JITTER_MS = 500;
+const MAX_RETRY_AFTER_MS = 60_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function calculateBackoffDelay(attempt: number): number {
+  return BASE_BACKOFF_MS * Math.pow(2, attempt) + Math.random() * BACKOFF_JITTER_MS;
+}
+
+function clampRetryAfter(delayMs: number): number {
+  return Math.min(Math.max(delayMs, 0), MAX_RETRY_AFTER_MS);
+}
+
+function parseRetryAfter(headerValue: string | null): number | null {
+  if (!headerValue) {
+    return null;
+  }
+
+  const trimmed = headerValue.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const secondsDelay = Number(trimmed);
+  if (!Number.isNaN(secondsDelay)) {
+    return clampRetryAfter(secondsDelay * 1000);
+  }
+
+  const dateDelay = Date.parse(trimmed);
+  if (!Number.isNaN(dateDelay)) {
+    return clampRetryAfter(dateDelay - Date.now());
+  }
+
+  return null;
+}
+
+function backoff(attempt: number, overrideDelayMs?: number | null): Promise<void> {
+  const delay = overrideDelayMs ?? calculateBackoffDelay(attempt);
+  return sleep(delay);
+}
+
 export function createApiClient(config: Config) {
   const account = privateKeyToAccount(config.privateKey as `0x${string}`);
   const apiUrl = config.apiUrl;
@@ -39,15 +83,6 @@ export function createApiClient(config: Config) {
     return status === 408 || status === 429 || status === 502 || status === 503 || status === 504;
   }
 
-  /**
-   * Sleep for exponential backoff: base * 2^attempt (with jitter).
-   */
-  function backoff(attempt: number): Promise<void> {
-    const base = 1000;
-    const delay = base * Math.pow(2, attempt) + Math.random() * 500;
-    return new Promise((resolve) => setTimeout(resolve, delay));
-  }
-
   async function makeRequest(
     method: string,
     path: string,
@@ -57,6 +92,7 @@ export function createApiClient(config: Config) {
     const url = `${apiUrl}${path}`;
     const { timeout, maxRetries } = config;
     let lastError: Error | null = null;
+    let lastRetryAfterMs: number | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Bail out immediately if already cancelled before starting the attempt
@@ -68,7 +104,8 @@ export function createApiClient(config: Config) {
 
       if (attempt > 0) {
         mcpLogger.debug('api', { event: 'retry', method, path, attempt });
-        await backoff(attempt - 1);
+        await backoff(attempt - 1, lastRetryAfterMs);
+        lastRetryAfterMs = null;
       }
 
       let onExternalAbort: (() => void) | undefined;
@@ -143,6 +180,11 @@ export function createApiClient(config: Config) {
 
         // Retry on transient server errors
         if (isTransient(res.status) && attempt < maxRetries) {
+          if (res.status === 429) {
+            lastRetryAfterMs = parseRetryAfter(res.headers.get('retry-after'));
+          } else {
+            lastRetryAfterMs = null;
+          }
           lastError = new Error(`HTTP ${res.status}`);
           continue;
         }
@@ -175,6 +217,8 @@ export function createApiClient(config: Config) {
         } else {
           lastError = errObj;
         }
+
+        lastRetryAfterMs = null;
 
         if (attempt >= maxRetries) {
           throw lastError;
